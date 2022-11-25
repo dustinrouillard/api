@@ -22,7 +22,7 @@ pub struct Config {
 
     #[envconfig(
         from = "SPOTIFY_REDIRECT_URI",
-        default = "http://localhost:8080/v1/spotify/setup"
+        default = "http://localhost:8080/v2/spotify/setup"
     )]
     pub spotify_redirect_uri: String,
 

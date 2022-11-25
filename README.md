@@ -1,3 +1,5 @@
 # Dustin API
 
-Used for tracking spotify playing data, and for handling multipart file uploads to my minio server.
+This time in rust.
+
+Used for tracking spotify playing data, eventually will be used for uploading files using multipart formdata to minio.

@@ -1,0 +1,31 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4"
+actix-web = "4"
+envconfig = "0.10.0"
+serde_with = "2.1.0"
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+serde = { version = "1.0.144", features = ["derive"] }
+tracing = "0.1"
+tracing-actix-web = "0.6"
+tracing-subscriber = { version = "0.3.1", default-features = false, features = ["fmt", "ansi", "env-filter", "registry", "tracing-log"] }
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4.23"
+sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "postgres", "chrono" ] }
+postgres = "0.19.4"
+redis = {version ="0.21.5", features = ["tokio-comp", "connection-manager"]}
+lapin = "2.1.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = 'abort'
+strip = true

@@ -70,6 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .app_data(web::Data::clone(&data_http))
             .wrap(TracingLogger::default())
             .service(services::base::index)
+            .service(services::base::health)
             .service(services::spotify::current)
             .service(services::spotify::authorize)
             .service(services::spotify::setup)

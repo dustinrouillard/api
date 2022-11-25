@@ -14,10 +14,7 @@ pub struct Config {
     )]
     pub spotify_client_id: String,
 
-    #[envconfig(
-        from = "SPOTIFY_CLIENT_SECRET",
-        default = "95dc3cd5184440b987996c2bf1876f76"
-    )]
+    #[envconfig(from = "SPOTIFY_CLIENT_SECRET")]
     pub spotify_client_secret: String,
 
     #[envconfig(

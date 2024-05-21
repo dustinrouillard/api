@@ -85,11 +85,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .service(
                         web::scope("/blog")
                             .service(services::blog::auth::login)
+                            .service(services::blog::posts::get_post)
+                            .service(services::blog::posts::get_posts)
                             .service(
                                 web::scope("")
                                     .wrap(from_fn(services::blog::middleware::blog_admin_auth_mw))
                                     .service(services::blog::auth::logout)
-                                    .service(services::blog::auth::get_user),
+                                    .service(services::blog::auth::get_user)
+                                    .service(services::blog::posts::create_post)
+                                    .service(services::blog::posts::update_post)
+                                    .service(services::blog::posts::delete_post),
                             ),
                     ),
             )

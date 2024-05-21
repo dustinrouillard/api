@@ -5,7 +5,6 @@ use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_with::{self, skip_serializing_none};
 use sqlx::types::{chrono::DateTime, Json};
-use tokio::sync::Mutex;
 
 use crate::{
     connectivity::postgres::{SpotifyArtist, SpotifyHistoryItem},
@@ -43,9 +42,8 @@ pub struct Device {
     device_type: String,
 }
 
-pub(crate) async fn fetch_spotify_current(data: web::Data<Mutex<ServerState>>) {
-    let data = data.lock().await;
-    let redis = &mut data.redis.clone();
+pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
+    let redis = &mut data.valkey.clone();
     let rabbit = &mut data.rabbit.clone();
     let postgres = &mut data.postgres.clone();
 

@@ -2,6 +2,9 @@ use envconfig::Envconfig;
 
 #[derive(Envconfig)]
 pub struct Config {
+    #[envconfig(from = "ENV", default = "dev")]
+    pub env: String,
+
     #[envconfig(from = "LISTEN_HOST", default = "0.0.0.0")]
     pub listen_host: String,
 
@@ -25,14 +28,14 @@ pub struct Config {
 
     #[envconfig(
         from = "POSTGRES_DSN",
-        default = "postgres://postgres:postgres@10.8.0.7/testing"
+        default = "postgres://postgres:postgres@postgres/testing"
     )]
     pub postgres_dsn: String,
 
-    #[envconfig(from = "REDIS_DSN", default = "redis://10.7.20.3:6379")]
-    pub redis_dsn: String,
+    #[envconfig(from = "VALKEY_DSN", default = "redis://valkey:6379")]
+    pub valkey_dsn: String,
 
-    #[envconfig(from = "RABBIT_DSN", default = "amqp://rabbit:password@10.7.20.3:5672")]
+    #[envconfig(from = "RABBIT_DSN", default = "amqp://rabbit:password@rabbitmq:5672")]
     pub rabbit_dsn: String,
 
     #[envconfig(from = "RABBIT_QUEUE_NAME", default = "dstn-gateway-ingest")]

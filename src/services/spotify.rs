@@ -2,7 +2,6 @@ use actix_web::{get, http::Error, web, HttpResponse};
 use envconfig::Envconfig;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::sync::Mutex;
 
 use crate::{config::Config, ServerState};
 
@@ -33,10 +32,9 @@ pub struct SpotifyTokens {
     pub scope: String,
 }
 
-#[get("/v2/spotify")]
-async fn current(data: web::Data<Mutex<ServerState>>) -> Result<HttpResponse, Error> {
-    let data = data.lock().await;
-    let redis = &mut data.redis.clone();
+#[get("")]
+async fn current(data: web::Data<ServerState>) -> Result<HttpResponse, Error> {
+    let redis = &mut data.valkey.clone();
 
     let current = redis.get_current().await;
 
@@ -45,10 +43,9 @@ async fn current(data: web::Data<Mutex<ServerState>>) -> Result<HttpResponse, Er
         .body(json!({"success": true, "data": &current}).to_string()))
 }
 
-#[get("/v2/spotify/authorize")]
-async fn authorize(data: web::Data<Mutex<ServerState>>) -> Result<HttpResponse, Error> {
-    let data = data.lock().await;
-    let redis = &mut data.redis.clone();
+#[get("/authorize")]
+async fn authorize(data: web::Data<ServerState>) -> Result<HttpResponse, Error> {
+    let redis = &mut data.valkey.clone();
 
     let setup_check = redis.check_spotify_setup().await;
     if setup_check {
@@ -66,7 +63,7 @@ async fn authorize(data: web::Data<Mutex<ServerState>>) -> Result<HttpResponse, 
     let config = Config::init_from_env().unwrap();
 
     let scope = "user-read-playback-state+user-read-currently-playing";
-    let redirect_uri = "http://127.0.0.1:8080/v2/spotify/setup";
+    let redirect_uri = "http://127.0.0.1:8080/spotify/setup";
     let url = format!("https://accounts.spotify.com/authorize?client_id={}&response_type=code&scope={}&redirect_uri={}", config.spotify_client_id, scope, redirect_uri);
     let json = json!({ "url": url });
 
@@ -75,13 +72,12 @@ async fn authorize(data: web::Data<Mutex<ServerState>>) -> Result<HttpResponse, 
         .body(json.to_string()))
 }
 
-#[get("/v2/spotify/setup")]
+#[get("/setup")]
 async fn setup(
-    data: web::Data<Mutex<ServerState>>,
+    data: web::Data<ServerState>,
     info: web::Query<AuthorizeQuery>,
 ) -> Result<HttpResponse, Box<dyn std::error::Error>> {
-    let data = data.lock().await;
-    let redis = &mut data.redis.clone();
+    let redis = &mut data.valkey.clone();
 
     let setup_check = redis.check_spotify_setup().await;
     if setup_check {
@@ -99,7 +95,7 @@ async fn setup(
     let config = Config::init_from_env().unwrap();
 
     let code = &info.code;
-    let redirect_uri = "http://127.0.0.1:8080/v2/spotify/setup";
+    let redirect_uri = "http://127.0.0.1:8080/spotify/setup";
     let data = AuthorizationData {
         code: code.into(),
         grant_type: "authorization_code".into(),

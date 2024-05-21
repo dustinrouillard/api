@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::{config::Config, modules::spotify::CurrentPlaying, services::spotify::SpotifyTokens};
 
 #[derive(Clone)]
-pub struct RedisManager {
+pub struct ValkeyManager {
     pub cm: ConnectionManager,
 }
 
@@ -26,12 +26,12 @@ pub struct AuthorizationData {
     redirect_uri: String,
 }
 
-impl RedisManager {
+impl ValkeyManager {
     pub async fn new() -> Self {
         let config = Config::init_from_env().unwrap();
-        let client = Client::open(config.redis_dsn).unwrap();
+        let client = Client::open(config.valkey_dsn).unwrap();
         let cm = ConnectionManager::new(client).await.unwrap();
-        tracing::info!("Connected to redis");
+        tracing::info!("Connected to valkey");
         Self { cm }
     }
 

@@ -25,12 +25,13 @@ async fn login(
     )
     .bind(username)
     .fetch_one(&postgres.pool)
-    .await
-    .map_err(|e| format!("{}", e));
+    .await;
 
-    // if user_record.is_err() {
-    //     return Err(Error);
-    // }
+    if user_record.is_err() {
+        return Ok(HttpResponse::Unauthorized()
+            .append_header(("Content-type", "application/json"))
+            .body(json!({"code": "invalid_username"}).to_string()));
+    }
 
     let user = user_record.unwrap();
 
@@ -38,11 +39,9 @@ async fn login(
     let valid = argon2::verify_encoded(&user.password.unwrap(), password).unwrap();
 
     if !valid {
-        let json = json!({"code": "invalid_authentication"});
-
         return Ok(HttpResponse::Unauthorized()
             .append_header(("Content-type", "application/json"))
-            .body(json.to_string()));
+            .body(json!({"code": "invalid_authentication"}).to_string()));
     }
 
     let session_token: String = rand::thread_rng()
@@ -57,11 +56,11 @@ async fn login(
         .query_async::<ConnectionManager, String>(&mut redis.cm)
         .await;
 
-    let json = json!({ "user": { "id": user.id, "username": user.username, "display_name": user.display_name, }, "session": { "token": session_token } });
+    let response = json!({ "user": { "id": user.id, "username": user.username, "display_name": user.display_name, }, "session": { "token": session_token } });
 
     Ok(HttpResponse::Ok()
         .append_header(("Content-type", "application/json"))
-        .body(json.to_string()))
+        .body(response.to_string()))
 }
 
 #[get("/me")]
@@ -85,14 +84,10 @@ async fn get_user(req: HttpRequest) -> Result<HttpResponse, Error> {
 
 #[delete("/auth")]
 async fn logout(req: HttpRequest, state: web::Data<ServerState>) -> Result<HttpResponse, Error> {
-    // let state = state.get_mut();
     let redis = &mut state.valkey.clone();
 
     let exts = req.extensions_mut();
     let session = exts.get::<BlogAdminIntSession>().unwrap();
-
-    println!("{}", session.token);
-    println!("{}", session.user_id);
 
     let _ = redis::cmd("DEL")
         .arg(format!("blog_admin_session/{}", session.token))

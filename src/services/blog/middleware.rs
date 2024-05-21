@@ -6,6 +6,7 @@ use actix_web::{
     Error, HttpMessage, HttpResponse,
 };
 use actix_web_lab::middleware::Next;
+use redis::aio::ConnectionManager;
 use serde_json::json;
 
 use crate::{
@@ -35,32 +36,59 @@ pub async fn blog_admin_auth_mw(
             .map_into_boxed_body());
         }
         Some(token) => {
-            let redis_session: String = redis::cmd("GET")
+            let redis_session = redis::cmd("GET")
                 .arg(format!("blog_admin_session/{}", token.to_str().unwrap()))
-                .query_async(&mut redis.cm)
-                .await
-                .unwrap();
+                .query_async::<ConnectionManager, String>(&mut redis.cm)
+                .await;
 
-            let session = serde_json::from_str::<BlogAdminSession>(&redis_session).unwrap();
+            match redis_session {
+                Err(_) => {
+                    return Ok(ServiceResponse::new(
+                        req.request().to_owned(),
+                        HttpResponse::Unauthorized()
+                            .append_header(("Content-type", "application/json"))
+                            .body(json!({"code": "invalid_authentication_state"}).to_string()),
+                    )
+                    .map_into_boxed_body());
+                }
 
-            let user = sqlx::query_as::<_, BlogAdminUser>(
-                "SELECT id, username, display_name FROM blog_admin_users WHERE id = $1;",
-            )
-            .bind(session.user_id)
-            .fetch_one(&postgres.pool)
-            .await
-            .map_err(|e| format!("{}", e));
+                Ok(session_token) => {
+                    let session = serde_json::from_str::<BlogAdminSession>(&session_token).unwrap();
 
-            req.extensions_mut().insert(user.clone().unwrap());
-            req.extensions_mut().insert(BlogAdminIntSession {
-                user_id: user.unwrap().id.to_string(),
-                token: token.to_str().unwrap().to_string(),
-            });
+                    let user = sqlx::query_as::<_, BlogAdminUser>(
+                        "SELECT id, username, display_name FROM blog_admin_users WHERE id = $1;",
+                    )
+                    .bind(session.user_id)
+                    .fetch_one(&postgres.pool)
+                    .await;
 
-            return next
-                .call(req)
-                .await
-                .map(ServiceResponse::map_into_boxed_body);
+                    match user {
+                        Ok(user) => {
+                            req.extensions_mut().insert(user.clone());
+                            req.extensions_mut().insert(BlogAdminIntSession {
+                                user_id: user.id.to_string(),
+                                token: token.to_str().unwrap().to_string(),
+                            });
+
+                            return next
+                                .call(req)
+                                .await
+                                .map(ServiceResponse::map_into_boxed_body);
+                        }
+                        Err(_) => {
+                            return Ok(ServiceResponse::new(
+                                req.request().to_owned(),
+                                HttpResponse::Unauthorized()
+                                    .append_header(("Content-type", "application/json"))
+                                    .body(
+                                        json!({"code": "invalid_authentication_user"}).to_string(),
+                                    ),
+                            )
+                            .map_into_boxed_body());
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -430,11 +430,15 @@ dependencies = [
  "actix-multipart",
  "actix-web",
  "actix-web-lab",
+ "bytes",
  "chrono",
  "envconfig",
  "futures",
+ "hex",
+ "infer",
  "lapin",
  "lazy_static",
+ "once_cell",
  "prisma-client-rust",
  "prisma-client-rust-cli",
  "rand 0.8.5",
@@ -446,6 +450,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "serde_with",
+ "sha1",
  "tokio",
  "tracing",
  "tracing-actix-web",
@@ -998,6 +1003,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
 dependencies = [
  "nom",
+]
+
+[[package]]
+name = "cfb"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
+dependencies = [
+ "byteorder",
+ "fnv",
+ "uuid",
 ]
 
 [[package]]
@@ -2322,6 +2338,15 @@ name = "indoc"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa799dd5ed20a7e349f3b4639aa80d74549c81716d9ec4f994c9b5815598306"
+
+[[package]]
+name = "infer"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb33622da908807a06f9513c19b3c1ad50fab3e4137d82a78107d502075aa199"
+dependencies = [
+ "cfb",
+]
 
 [[package]]
 name = "inout"

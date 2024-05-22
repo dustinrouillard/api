@@ -8,7 +8,9 @@ use std::{error::Error, time::Duration};
 
 use actix_web::{middleware, web, App, HttpServer};
 use actix_web_lab::middleware::from_fn;
-use connectivity::{rabbit::RabbitManager, valkey::ValkeyManager};
+use connectivity::{
+  rabbit::RabbitManager, s3::S3Manager, valkey::ValkeyManager,
+};
 use envconfig::Envconfig;
 use tokio::time;
 use tracing_actix_web::TracingLogger;
@@ -24,6 +26,7 @@ pub struct ServerState {
   pub valkey: ValkeyManager,
   pub rabbit: RabbitManager,
   pub prisma: PrismaClient,
+  pub s3: S3Manager,
 }
 
 #[tokio::main]
@@ -39,6 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
   let valkey = connectivity::valkey::ValkeyManager::new().await;
   let rabbit = connectivity::rabbit::RabbitManager::new().await;
+  let s3 = connectivity::s3::S3Manager::new().await.unwrap();
 
   let prisma = PrismaClient::_builder().build().await.unwrap();
 
@@ -56,6 +60,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     valkey,
     rabbit,
     prisma,
+    s3,
   });
   let data_http = web::Data::clone(&data);
 
@@ -82,6 +87,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
       .service(
         web::scope("/v2")
           .service(services::base::health)
+          .service(
+            web::scope("/uploads")
+              .service(services::uploads::routes::upload_to_cdn),
+          )
           .service(
             web::scope("/spotify")
               .service(services::spotify::routes::current)

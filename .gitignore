@@ -1,3 +1,5 @@
 /target
 
+src/connectivity/prisma.rs
+
 .env

@@ -1,0 +1,67 @@
+generator client {
+  provider = "cargo prisma"
+  output   = "../src/connectivity/prisma.rs"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_DSN")
+}
+
+model blog_admin_users {
+  id           String  @id @default(dbgenerated("id_generator()"))
+  username     String  @unique(map: "blog_admin_users_username_idx")
+  display_name String?
+  password     String
+}
+
+model blog_assets {
+  id          String      @id
+  path        String
+  post_id     String?
+  upload_date DateTime?   @db.Timestamp(6)
+  blog_posts  blog_posts? @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_blog_assets_post")
+
+  @@index([post_id])
+  @@index([upload_date])
+}
+
+model blog_posts {
+  id           String        @id @default(dbgenerated("id_generator()"))
+  slug         String        @unique(map: "blog_posts_slug_idx") @default(dbgenerated("date_slug()"))
+  title        String        @default(dbgenerated("date_title()"))
+  description  String?
+  image        String?
+  visibility   String        @default("draft") @db.VarChar(8)
+  tags         String[]      @default([])
+  body         String?
+  created_at   DateTime      @default(now()) @db.Timestamp(6)
+  published_at DateTime?     @db.Timestamp(6)
+  blog_assets  blog_assets[]
+
+  @@index([created_at], map: "blog_posts_created_idx")
+  @@index([description])
+  @@index([published_at], map: "blog_posts_published_idx")
+  @@index([title])
+}
+
+model spotify_devices {
+  id              Int               @id @default(autoincrement())
+  name            String?
+  type            String?
+  spotify_history spotify_history[]
+}
+
+model spotify_history {
+  id              String
+  type            String          @default("track")
+  name            String
+  artists         Json[]
+  length          Int
+  image           String
+  device          Int             @default(autoincrement())
+  listened_at     DateTime        @default(now()) @db.Timestamptz(6)
+  spotify_devices spotify_devices @relation(fields: [device], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([id, listened_at])
+}

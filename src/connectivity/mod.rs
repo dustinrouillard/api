@@ -1,3 +1,3 @@
-pub mod postgres;
+pub mod prisma;
 pub mod rabbit;
 pub mod valkey;

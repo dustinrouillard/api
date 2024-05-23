@@ -122,7 +122,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                   .service(services::blog::posts::update_post)
                   .service(services::blog::posts::delete_post)
                   .service(services::blog::assets::get_assets_for_post)
-                  .service(services::blog::assets::upload_asset_for_post),
+                  .service(services::blog::assets::upload_asset_for_post)
+                  .service(services::blog::assets::delete_asset_for_post),
               ),
           ),
       )

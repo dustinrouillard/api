@@ -8,7 +8,7 @@ use argon2::{self};
 use rand::{distributions::Alphanumeric, Rng};
 
 use actix_web::{
-  delete, get, http::Error, post, web, HttpMessage, HttpRequest,
+  delete, get, http::Error, patch, post, web, HttpMessage, HttpRequest,
   HttpResponse,
 };
 use redis::aio::ConnectionManager;
@@ -22,7 +22,7 @@ async fn login(
   let username = body.username.to_string();
 
   let prisma = &state.prisma;
-  let redis = &mut state.valkey.clone();
+  let valkey = &mut state.valkey.clone();
 
   let user_lookup = prisma
     .blog_admin_users()
@@ -54,7 +54,7 @@ async fn login(
         let _ = redis::cmd("SET")
           .arg(format!("blog_admin_session/{}", session_token))
           .arg(json!({"user_id": user.id}).to_string())
-          .query_async::<ConnectionManager, String>(&mut redis.cm)
+          .query_async::<ConnectionManager, String>(&mut valkey.cm)
           .await;
 
         let response = json!({ "user": { "id": user.id, "username": user.username, "display_name": user.display_name, }, "session": { "token": session_token } });
@@ -100,19 +100,31 @@ async fn get_user(req: HttpRequest) -> Result<HttpResponse, Error> {
   )
 }
 
+#[patch("/me")]
+async fn update_user(_req: HttpRequest) -> Result<HttpResponse, Error> {
+  Ok(HttpResponse::NotImplemented().finish())
+}
+
+#[patch("/auth")]
+async fn change_password(
+  _req: HttpRequest,
+) -> Result<HttpResponse, Error> {
+  Ok(HttpResponse::NotImplemented().finish())
+}
+
 #[delete("/auth")]
 async fn logout(
   req: HttpRequest,
   state: web::Data<ServerState>,
 ) -> Result<HttpResponse, Error> {
-  let redis = &mut state.valkey.clone();
+  let valkey = &mut state.valkey.clone();
 
   let exts = req.extensions_mut();
   let session = exts.get::<BlogAdminIntSession>().unwrap();
 
   let _ = redis::cmd("DEL")
     .arg(format!("blog_admin_session/{}", session.token))
-    .query_async::<ConnectionManager, String>(&mut redis.cm)
+    .query_async::<ConnectionManager, String>(&mut valkey.cm)
     .await;
 
   Ok(HttpResponse::NoContent().finish())

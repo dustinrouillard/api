@@ -6,6 +6,7 @@ pub mod structs;
 
 use std::{error::Error, time::Duration};
 
+use actix_multipart::form::MultipartFormConfig;
 use actix_web::{middleware, web, App, HttpServer};
 use actix_web_lab::middleware::from_fn;
 use connectivity::{
@@ -81,6 +82,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
   HttpServer::new(move || {
     App::new()
       .app_data(web::Data::clone(&data_http))
+      .app_data(
+        MultipartFormConfig::default()
+          .total_limit(10 * 1024 * 1024)
+          .memory_limit(10 * 1024 * 1024),
+      )
       .wrap(middleware::NormalizePath::default())
       .wrap(TracingLogger::default())
       .default_service(web::to(services::base::index))
@@ -89,6 +95,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
           .service(services::base::health)
           .service(
             web::scope("/uploads")
+              .wrap(from_fn(
+                services::uploads::middleware::uploads_auth_mw,
+              ))
               .service(services::uploads::routes::upload_to_cdn),
           )
           .service(
@@ -111,7 +120,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                   .service(services::blog::auth::get_user)
                   .service(services::blog::posts::create_post)
                   .service(services::blog::posts::update_post)
-                  .service(services::blog::posts::delete_post),
+                  .service(services::blog::posts::delete_post)
+                  .service(services::blog::assets::get_assets_for_post)
+                  .service(services::blog::assets::upload_asset_for_post),
               ),
           ),
       )

@@ -24,7 +24,7 @@ pub async fn blog_admin_auth_mw(
   let state = req.app_data::<Data<ServerState>>().unwrap().clone();
 
   let prisma = &state.prisma;
-  let redis = &mut state.valkey.clone();
+  let valkey = &mut state.valkey.clone();
 
   match auth_token {
     None => {
@@ -41,7 +41,7 @@ pub async fn blog_admin_auth_mw(
     Some(token) => {
       let redis_session = redis::cmd("GET")
         .arg(format!("blog_admin_session/{}", token.to_str().unwrap()))
-        .query_async::<ConnectionManager, String>(&mut redis.cm)
+        .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 
       match redis_session {

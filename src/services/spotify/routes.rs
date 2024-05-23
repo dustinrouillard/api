@@ -26,8 +26,8 @@ struct TokenError {
 async fn current(
   data: web::Data<ServerState>,
 ) -> Result<HttpResponse, Error> {
-  let redis = &mut data.valkey.clone();
-  let json = helpers::get_playing(redis).await;
+  let valkey = &mut data.valkey.clone();
+  let json = helpers::get_playing(valkey).await;
 
   Ok(
     HttpResponse::Ok()
@@ -40,9 +40,9 @@ async fn current(
 async fn authorize(
   data: web::Data<ServerState>,
 ) -> Result<HttpResponse, Error> {
-  let redis = &mut data.valkey.clone();
+  let valkey = &mut data.valkey.clone();
 
-  let setup_check = redis
+  let setup_check = valkey
     .cm
     .exists("spotify/refresh_token")
     .await
@@ -80,9 +80,9 @@ async fn setup(
   data: web::Data<ServerState>,
   info: web::Query<AuthorizeQuery>,
 ) -> Result<HttpResponse, Box<dyn std::error::Error>> {
-  let redis = &mut data.valkey.clone();
+  let valkey = &mut data.valkey.clone();
 
-  let setup_check = redis
+  let setup_check = valkey
     .cm
     .exists("spotify/refresh_token")
     .await
@@ -137,7 +137,7 @@ async fn setup(
       .arg(&body.access_token)
       .arg("EX")
       .arg(&body.expires_in)
-      .query_async::<ConnectionManager, String>(&mut redis.cm)
+      .query_async::<ConnectionManager, String>(&mut valkey.cm)
       .await
       .unwrap();
 
@@ -147,7 +147,7 @@ async fn setup(
         redis::cmd("SET")
           .arg("spotify/refresh_token")
           .arg(refresh_token)
-          .query_async::<ConnectionManager, String>(&mut redis.cm)
+          .query_async::<ConnectionManager, String>(&mut valkey.cm)
           .await
           .unwrap();
       }

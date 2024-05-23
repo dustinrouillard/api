@@ -1,7 +1,22 @@
+use actix_multipart::form::{bytes::Bytes, MultipartForm};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 extern crate serde_json;
+
+#[serde_as]
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlogUserMutate {
+  pub username: Option<String>,
+  pub display_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct BlogUserPasswordChange {
+  pub password: String,
+  pub new_password: String,
+}
 
 #[derive(Deserialize)]
 pub struct BlogLoginRequest {
@@ -58,4 +73,10 @@ pub struct BlogPost {
   pub body: Option<String>,
   pub created_at: NaiveDateTime,
   pub published_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, MultipartForm)]
+pub struct BlogAssetUpload {
+  #[multipart(rename = "file")]
+  pub files: Vec<Bytes>,
 }

@@ -15,17 +15,6 @@ model blog_admin_users {
   password     String
 }
 
-model blog_assets {
-  id          String      @id
-  path        String
-  post_id     String?
-  upload_date DateTime?   @db.Timestamp(6)
-  blog_posts  blog_posts? @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_blog_assets_post")
-
-  @@index([post_id])
-  @@index([upload_date])
-}
-
 model blog_posts {
   id           String        @id @default(dbgenerated("id_generator()"))
   slug         String        @unique(map: "blog_posts_slug_idx") @default(dbgenerated("date_slug()"))
@@ -64,4 +53,16 @@ model spotify_history {
   spotify_devices spotify_devices @relation(fields: [device], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@id([id, listened_at])
+}
+
+model blog_assets {
+  hash        String     @id
+  post_id     String
+  file_type   String
+  file_size   Int        @default(0)
+  upload_date DateTime   @default(now()) @db.Timestamp(6)
+  blog_posts  blog_posts @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_blog_assets_post")
+
+  @@index([post_id])
+  @@index([upload_date])
 }

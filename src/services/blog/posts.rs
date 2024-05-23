@@ -1,3 +1,5 @@
+use std::vec;
+
 use actix_web::{
   delete, get, http::Error, patch, post, web, HttpResponse,
 };
@@ -249,7 +251,10 @@ async fn delete_post(
 
       let _ = prisma
         .blog_posts()
-        .delete(blog_posts::id::equals(post.id))
+        .update(
+          blog_posts::id::equals(post.id),
+          vec![blog_posts::visibility::set("deleted".to_string())],
+        )
         .exec()
         .await;
 

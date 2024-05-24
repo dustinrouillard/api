@@ -61,4 +61,7 @@ pub struct Config {
 
   #[envconfig(from = "S3_FILES_ALIAS", default = "files.dstn.to")]
   pub s3_files_alias: String,
+
+  #[envconfig(from = "GITHUB_PAT", default = "")]
+  pub github_pat: String,
 }

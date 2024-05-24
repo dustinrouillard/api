@@ -434,6 +434,7 @@ dependencies = [
  "chrono",
  "envconfig",
  "futures",
+ "gql_client",
  "hex",
  "infer",
  "lapin",
@@ -1982,6 +1983,18 @@ name = "glob"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+
+[[package]]
+name = "gql_client"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e57f4862d3e5cd4ffe8df03fa2137e620e33578bbc1895e6f8f569630e17b1db"
+dependencies = [
+ "log",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "graphql-parser"

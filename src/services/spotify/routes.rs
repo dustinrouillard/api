@@ -1,13 +1,15 @@
 use actix_web::{get, http::Error, web, HttpResponse};
 use envconfig::Envconfig;
+use prisma_client_rust::Direction;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::{
   config::Config,
+  connectivity::prisma::spotify_history,
   services::spotify::helpers,
-  structs::spotify::{AuthorizationData, SpotifyTokens},
+  structs::spotify::{AuthorizationData, RecentSongQuery, SpotifyTokens},
   ServerState,
 };
 
@@ -33,6 +35,49 @@ async fn current(
     HttpResponse::Ok()
       .insert_header(("Content-Type", "application/json"))
       .body(json!({"success": true, "data": &json}).to_string()),
+  )
+}
+
+#[get("/recents")]
+async fn recent_listens(
+  state: web::Data<ServerState>,
+  query: Option<web::Query<RecentSongQuery>>,
+) -> Result<HttpResponse, Error> {
+  let prisma = &mut &state.prisma;
+
+  let query: web::Query<RecentSongQuery> = query
+    .unwrap_or(actix_web::web::Query(RecentSongQuery { limit: Some(10) }));
+
+  let recents = prisma
+    .spotify_history()
+    .find_many(vec![])
+    .order_by(spotify_history::listened_at::order(Direction::Desc))
+    .take(query.limit.unwrap_or(10))
+    .include(spotify_history::include!({ spotify_devices: select { id name r#type } }))
+    .exec()
+    .await;
+
+  let recents: Vec<serde_json::Value> = recents
+    .unwrap()
+    .into_iter()
+    .map(|recent| {
+      json!({
+        "id": recent.id,
+        "type": recent.r#type,
+        "name": recent.name,
+        "artists": recent.artists,
+        "length": recent.length,
+        "image": recent.image,
+        "device": recent.spotify_devices,
+        "listened_at": recent.listened_at
+      })
+    })
+    .collect();
+
+  Ok(
+    HttpResponse::Ok()
+      .insert_header(("Content-Type", "application/json"))
+      .body(json!({"recents": recents}).to_string()),
   )
 }
 

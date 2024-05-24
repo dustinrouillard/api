@@ -103,6 +103,10 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
             Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap());
           let current_playing = Arc::clone(&current_clone);
 
+          if current_playing.progress.unwrap() < 10000 {
+            return;
+          }
+
           match prisma
             .spotify_history()
             .find_first(vec![spotify_history::id::equals(
@@ -118,29 +122,13 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
                 let date_minus_length =
                   (date.timestamp() * 1000) - latest.length as i64;
 
-                if current_playing.progress.unwrap() < 10000 {
-                  return;
-                }
-
                 if date_minus_length >= listened_date {
                   store_history(prisma, current_playing).await;
                 }
               }
-              None => {
-                if current_playing.progress.unwrap() < 10000 {
-                  return;
-                }
-
-                store_history(prisma, current_playing).await;
-              }
+              None => store_history(prisma, current_playing).await,
             },
-            Err(_) => {
-              if current_playing.progress.unwrap() < 10000 {
-                return;
-              }
-
-              store_history(prisma, current_playing).await;
-            }
+            Err(_) => store_history(prisma, current_playing).await,
           }
         }
       } else {

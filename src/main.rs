@@ -6,6 +6,7 @@ pub mod structs;
 
 use std::{error::Error, time::Duration};
 
+use actix_cors::Cors;
 use actix_multipart::form::MultipartFormConfig;
 use actix_web::{middleware, web, App, HttpServer};
 use connectivity::{
@@ -79,6 +80,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
   }
 
   HttpServer::new(move || {
+    let cors = Cors::default()
+      .allowed_origin_fn(|origin, _req_head| {
+        origin.as_bytes().ends_with(b".dstn.to")
+      })
+      .allowed_origin_fn(|origin, _req_head| {
+        origin.as_bytes().ends_with(b":3000")
+      });
+
     App::new()
       .app_data(web::Data::clone(&data_http))
       .app_data(
@@ -86,6 +95,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
           .total_limit(10 * 1024 * 1024)
           .memory_limit(10 * 1024 * 1024),
       )
+      .wrap(cors)
       .wrap(middleware::NormalizePath::default())
       .wrap(TracingLogger::default())
       .default_service(web::to(services::base::index))

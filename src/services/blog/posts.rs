@@ -1,18 +1,96 @@
 use std::vec;
 
 use actix_web::{
-  delete, get, http::Error, patch, post, web, HttpResponse,
+  delete, get,
+  http::Error,
+  patch, post,
+  web::{self},
+  HttpResponse,
 };
+use prisma_client_rust::Direction;
 use serde_json::json;
 
 use crate::{
-  connectivity::prisma::blog_posts, structs::blog::BlogPostMutate,
+  connectivity::prisma::blog_posts,
+  structs::blog::{BlogPostMutate, BlogPostsQuery},
   ServerState,
 };
 
 #[get("/posts")]
-async fn get_posts() -> Result<HttpResponse, Error> {
-  Ok(HttpResponse::NotImplemented().finish())
+async fn get_posts(
+  query: Option<web::Query<BlogPostsQuery>>,
+  state: web::Data<ServerState>,
+) -> Result<HttpResponse, Error> {
+  let prisma = &mut &state.prisma;
+
+  let query: web::Query<BlogPostsQuery> =
+    query.unwrap_or(actix_web::web::Query(BlogPostsQuery {
+      limit: Some(25),
+      offset: Some(0),
+    }));
+
+  let posts = prisma
+    .blog_posts()
+    .find_many(vec![blog_posts::visibility::equals("public".to_string())])
+    .take(query.limit.unwrap_or(25))
+    .skip(query.offset.unwrap_or(0))
+    .order_by(blog_posts::published_at::order(Direction::Asc))
+    .exec()
+    .await;
+
+  let posts: Vec<serde_json::Value> = posts
+    .unwrap()
+    .iter()
+    .map(|post| {
+      json!({
+        "id": post.id,
+        "slug": post.slug,
+        "title": post.title,
+        "description": post.description,
+        "image": post.image,
+        "visibility": post.visibility,
+        "body": post.body,
+        "tags": post.tags,
+        "published_at": post.published_at,
+      })
+    })
+    .collect();
+
+  Ok(
+    HttpResponse::Ok()
+      .append_header(("Content-type", "application/json"))
+      .body(json!({"posts": posts}).to_string()),
+  )
+}
+
+#[get("/posts")]
+async fn get_all_posts(
+  query: Option<web::Query<BlogPostsQuery>>,
+  state: web::Data<ServerState>,
+) -> Result<HttpResponse, Error> {
+  let prisma = &mut &state.prisma;
+
+  let query: web::Query<BlogPostsQuery> =
+    query.unwrap_or(actix_web::web::Query(BlogPostsQuery {
+      limit: Some(25),
+      offset: Some(0),
+    }));
+
+  let posts = prisma
+    .blog_posts()
+    .find_many(vec![])
+    .take(query.limit.unwrap_or(25))
+    .skip(query.offset.unwrap_or(0))
+    .order_by(blog_posts::created_at::order(Direction::Asc))
+    .exec()
+    .await
+    .unwrap();
+
+  Ok(
+    HttpResponse::Ok()
+      .append_header(("Content-type", "application/json"))
+      .body(json!({"posts": posts}).to_string()),
+  )
 }
 
 #[post("/posts")]

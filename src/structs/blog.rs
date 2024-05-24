@@ -4,6 +4,12 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 extern crate serde_json;
 
+#[derive(Deserialize, Debug)]
+pub struct BlogPostsQuery {
+  pub limit: Option<i64>,
+  pub offset: Option<i64>,
+}
+
 #[serde_as]
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug, Clone)]

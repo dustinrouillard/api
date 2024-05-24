@@ -112,7 +112,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
               .service(services::blog::posts::get_post)
               .service(services::blog::posts::get_posts)
               .service(
-                web::scope("")
+                web::scope("/admin")
                   .wrap(from_fn(
                     services::blog::middleware::blog_admin_auth_mw,
                   ))
@@ -120,6 +120,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                   .service(services::blog::auth::get_user)
                   .service(services::blog::auth::update_user)
                   .service(services::blog::auth::change_password)
+                  .service(services::blog::posts::get_all_posts)
                   .service(services::blog::posts::create_post)
                   .service(services::blog::posts::update_post)
                   .service(services::blog::posts::delete_post)

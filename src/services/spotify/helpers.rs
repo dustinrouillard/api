@@ -1,5 +1,6 @@
-use std::io::Error;
+use std::{io::Error, sync::Arc};
 
+use chrono::{DateTime, FixedOffset, Utc};
 use envconfig::Envconfig;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde_json::json;
@@ -7,11 +8,12 @@ use serde_json::json;
 use crate::{
   config::Config,
   connectivity::{
-    prisma::{spotify_devices, PrismaClient},
+    prisma::{spotify_devices, spotify_history, PrismaClient},
     valkey::ValkeyManager,
   },
   structs::spotify::{
-    AuthorizationData, CurrentPlaying, SpotifyAccount, SpotifyTokens,
+    AuthorizationData, CurrentPlaying, SpotifyAccount, SpotifyArtist,
+    SpotifyTokens,
   },
 };
 
@@ -184,4 +186,45 @@ pub async fn get_or_make_device(
       .await
       .unwrap(),
   }
+}
+
+pub async fn store_history(
+  prisma: &mut &PrismaClient,
+  current_playing: Arc<CurrentPlaying>,
+) {
+  let date: DateTime<FixedOffset> =
+    Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap());
+
+  let dev = get_or_make_device(
+    prisma,
+    current_playing.device.as_ref().unwrap().name.to_string(),
+    current_playing
+      .device
+      .as_ref()
+      .unwrap()
+      .device_type
+      .to_string(),
+  )
+  .await;
+
+  let mut artists = Vec::new();
+  for artist in current_playing.artists.as_ref().unwrap() {
+    artists.push(json!(SpotifyArtist {
+      name: artist.name.clone(),
+    }));
+  }
+
+  let current_playing = current_playing.as_ref().clone();
+  let _ = prisma.spotify_history().create(
+      current_playing.id.unwrap(),
+      current_playing.name.unwrap(),
+      current_playing.length.unwrap() as i32,
+      current_playing.image.unwrap(),
+      crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
+      vec![
+        spotify_history::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
+        spotify_history::artists::set(artists),
+        spotify_history::listened_at::set(date),
+      ]
+    ).exec().await;
 }

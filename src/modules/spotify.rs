@@ -2,17 +2,14 @@ use std::sync::Arc;
 
 use actix_web::web::{self};
 use chrono::prelude::*;
-use serde_json::json;
+use prisma_client_rust::Direction;
 
 use crate::{
   connectivity::prisma::spotify_history,
-  services::spotify::helpers::{self, get_or_make_device},
+  services::spotify::helpers::{self, store_history},
   structs::{
     self,
-    spotify::{
-      ArtistName, CurrentPlaying, DeviceRewrite, PlayerState,
-      SpotifyArtist,
-    },
+    spotify::{ArtistName, CurrentPlaying, DeviceRewrite, PlayerState},
   },
   ServerState,
 };
@@ -111,6 +108,7 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
             .find_first(vec![spotify_history::id::equals(
               current_playing.id.as_ref().unwrap().to_string(),
             )])
+            .order_by(spotify_history::listened_at::order(Direction::Desc))
             .exec()
             .await
           {
@@ -120,130 +118,28 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
                 let date_minus_length =
                   (date.timestamp() * 1000) - latest.length as i64;
 
-                if date_minus_length >= listened_date
-                  && current_playing.progress.unwrap() >= 10000
-                {
-                  let dev = get_or_make_device(
-                    prisma,
-                    current_playing
-                      .device
-                      .as_ref()
-                      .unwrap()
-                      .name
-                      .to_string(),
-                    current_playing
-                      .device
-                      .as_ref()
-                      .unwrap()
-                      .device_type
-                      .to_string(),
-                  )
-                  .await;
+                if current_playing.progress.unwrap() < 10000 {
+                  return;
+                }
 
-                  let mut artists = Vec::new();
-                  for artist in current_playing.artists.as_ref().unwrap() {
-                    artists.push(json!(SpotifyArtist {
-                      name: artist.name.clone(),
-                    }));
-                  }
-
-                  let current_playing = current_playing.as_ref().clone();
-                  let _ = prisma.spotify_history().create(
-                    current_playing.id.unwrap(),
-                    current_playing.name.unwrap(),
-                    current_playing.length.unwrap() as i32,
-                    current_playing.image.unwrap(),
-                    crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
-                    vec![
-                      spotify_history::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
-                      spotify_history::artists::set(artists),
-                      spotify_history::listened_at::set(date),
-                    ]
-                  ).exec().await;
+                if date_minus_length >= listened_date {
+                  store_history(prisma, current_playing).await;
                 }
               }
               None => {
-                if current_playing.progress.unwrap() >= 10000 {
-                  let device = get_or_make_device(
-                    prisma,
-                    current_playing
-                      .device
-                      .as_ref()
-                      .unwrap()
-                      .name
-                      .to_string(),
-                    current_playing
-                      .device
-                      .as_ref()
-                      .unwrap()
-                      .device_type
-                      .to_string(),
-                  )
-                  .await;
-
-                  let mut artists = Vec::new();
-                  for artist in current_playing.artists.as_ref().unwrap() {
-                    artists.push(json!(SpotifyArtist {
-                      name: artist.name.clone(),
-                    }));
-                  }
-
-                  let current_playing = current_playing.as_ref().clone();
-                  let _ = prisma.spotify_history().create(
-                    current_playing.id.unwrap(),
-                    current_playing.name.unwrap(),
-                    current_playing.length.unwrap() as i32,
-                    current_playing.image.unwrap(),
-                    crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(device.id),
-                    vec![
-                      spotify_history::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
-                      spotify_history::artists::set(artists),
-                      spotify_history::listened_at::set(date),
-                    ]
-                  ).exec().await;
+                if current_playing.progress.unwrap() < 10000 {
+                  return;
                 }
+
+                store_history(prisma, current_playing).await;
               }
             },
             Err(_) => {
-              if current_playing.progress.unwrap() >= 10000 {
-                let device = get_or_make_device(
-                  prisma,
-                  current_playing
-                    .device
-                    .as_ref()
-                    .unwrap()
-                    .name
-                    .to_string(),
-                  current_playing
-                    .device
-                    .as_ref()
-                    .unwrap()
-                    .device_type
-                    .to_string(),
-                )
-                .await;
-
-                let mut artists = Vec::new();
-                for artist in current_playing.artists.as_ref().unwrap() {
-                  artists.push(json!(SpotifyArtist {
-                    name: artist.name.clone(),
-                  }));
-                }
-
-                let current_playing = current_playing.as_ref().clone();
-                let _ = prisma.spotify_history().create(
-                    current_playing.id.unwrap(),
-                    current_playing.name.unwrap(),
-                    current_playing.length.unwrap() as i32,
-                    current_playing.image.unwrap(),
-                    crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(device.id),
-                    vec![
-                      spotify_history::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
-                      spotify_history::artists::set(artists),
-                      spotify_history::listened_at::set(date),
-                    ]
-                  ).exec().await;
+              if current_playing.progress.unwrap() < 10000 {
+                return;
               }
+
+              store_history(prisma, current_playing).await;
             }
           }
         }

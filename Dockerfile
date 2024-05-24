@@ -10,8 +10,6 @@ WORKDIR /app
 COPY . .
 
 RUN cargo prisma generate
-
-RUN ls -lha src/connectivity/
 RUN cargo build --release
 
 FROM alpine

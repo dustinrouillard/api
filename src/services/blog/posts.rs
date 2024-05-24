@@ -83,8 +83,26 @@ async fn get_all_posts(
     .skip(query.offset.unwrap_or(0))
     .order_by(blog_posts::created_at::order(Direction::Asc))
     .exec()
-    .await
-    .unwrap();
+    .await;
+
+  let posts: Vec<serde_json::Value> = posts
+    .unwrap()
+    .iter()
+    .map(|post| {
+      json!({
+        "id": post.id,
+        "slug": post.slug,
+        "title": post.title,
+        "description": post.description,
+        "image": post.image,
+        "visibility": post.visibility,
+        "body": post.body,
+        "tags": post.tags,
+        "created_at": post.created_at,
+        "published_at": post.published_at,
+      })
+    })
+    .collect();
 
   Ok(
     HttpResponse::Ok()
@@ -192,7 +210,6 @@ async fn get_post(
                     "visibility": post.visibility,
                     "tags": post.tags,
                     "body": post.body,
-                    "created_at": post.created_at,
                     "published_at": post.published_at,
                 }
             })

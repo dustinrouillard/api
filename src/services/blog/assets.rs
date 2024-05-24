@@ -1,6 +1,8 @@
 use actix_multipart::form::MultipartForm;
 use actix_web::{delete, get, http::Error, post, web, HttpResponse};
-use prisma_client_rust::prisma_errors::query_engine::UniqueKeyViolation;
+use prisma_client_rust::{
+  prisma_errors::query_engine::UniqueKeyViolation, Direction,
+};
 use serde_json::json;
 use sha1::{Digest, Sha1};
 
@@ -90,15 +92,109 @@ async fn upload_asset_for_post(
 #[get("/posts/{id}/assets")]
 async fn get_assets_for_post(
   post_id: web::Path<String>,
+  state: web::Data<ServerState>,
 ) -> Result<HttpResponse, Error> {
-  println!("{:?}", post_id);
-  Ok(HttpResponse::NotImplemented().finish())
+  let prisma = &mut &state.prisma;
+
+  let assets: Vec<blog_assets::Data> = prisma
+    .blog_assets()
+    .find_many(vec![blog_assets::post_id::equals(post_id.to_string())])
+    .order_by(blog_assets::upload_date::order(Direction::Asc))
+    .exec()
+    .await
+    .unwrap();
+
+  let assets: Vec<serde_json::Value> = assets
+    .iter()
+    .map(|post| {
+      json!({
+        "hash": post.hash,
+        "post_id": post.post_id,
+        "file_type": post.file_type,
+        "file_size": post.file_size,
+        "upload_date": post.upload_date,
+      })
+    })
+    .collect();
+
+  Ok(
+    HttpResponse::Ok()
+      .append_header(("Content-type", "application/json"))
+      .body(json!({"assets": assets}).to_string()),
+  )
 }
 
 #[delete("/posts/{id}/assets/{hash}")]
 async fn delete_asset_for_post(
+  state: web::Data<ServerState>,
   params: web::Path<Vec<String>>,
 ) -> Result<HttpResponse, Error> {
-  println!("{:?}", params);
-  Ok(HttpResponse::NotImplemented().finish())
+  let post_id = params.first().unwrap();
+  let hash = params.last().unwrap();
+
+  let prisma = &mut &state.prisma;
+  let s3 = &state.s3;
+
+  let asset = prisma
+    .blog_assets()
+    .find_first(vec![
+      blog_assets::hash::equals(hash.to_string()),
+      blog_assets::post_id::equals(post_id.to_string()),
+    ])
+    .exec()
+    .await;
+
+  match asset {
+    Ok(asset) => match asset {
+      Some(asset) => {
+        let file_type = asset.file_type;
+
+        let res = s3
+          .cdn_bucket
+          .delete_object(format!("blog/assets/{hash}.{file_type}"))
+          .await;
+
+        if res.unwrap().status_code() != 204 {
+          return Ok(
+            HttpResponse::BadRequest()
+              .append_header(("Content-type", "application/json"))
+              .body(
+                json!({
+                  "code": "failed_to_delete_from_s3"
+                })
+                .to_string(),
+              ),
+          );
+        }
+
+        let _ = prisma
+          .blog_assets()
+          .delete(blog_assets::hash::equals(hash.to_string()))
+          .exec()
+          .await;
+
+        Ok(HttpResponse::NoContent().finish())
+      }
+      None => Ok(
+        HttpResponse::NotFound()
+          .append_header(("Content-type", "application/json"))
+          .body(
+            json!({
+              "code": "asset_not_found"
+            })
+            .to_string(),
+          ),
+      ),
+    },
+    Err(_) => Ok(
+      HttpResponse::BadRequest()
+        .append_header(("Content-type", "application/json"))
+        .body(
+          json!({
+            "code": "error_with_asset_lookup"
+          })
+          .to_string(),
+        ),
+    ),
+  }
 }

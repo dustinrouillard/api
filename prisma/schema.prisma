@@ -1,6 +1,7 @@
 generator client {
-  provider = "cargo prisma"
-  output   = "../src/connectivity/prisma.rs"
+  provider    = "cargo prisma"
+  output      = "../src/connectivity/prisma.rs"
+  module_path = "crate::connectivity::prisma"
 }
 
 datasource db {

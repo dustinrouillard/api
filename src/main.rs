@@ -8,7 +8,6 @@ use std::{error::Error, time::Duration};
 
 use actix_multipart::form::MultipartFormConfig;
 use actix_web::{middleware, web, App, HttpServer};
-use actix_web_lab::middleware::from_fn;
 use connectivity::{
   rabbit::RabbitManager, s3::S3Manager, valkey::ValkeyManager,
 };
@@ -93,42 +92,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
       .service(
         web::scope("/v2")
           .service(services::base::health)
-          .service(
-            web::scope("/uploads")
-              .wrap(from_fn(
-                services::uploads::middleware::uploads_auth_mw,
-              ))
-              .service(services::uploads::routes::upload_to_cdn),
-          )
-          .service(
-            web::scope("/spotify")
-              .service(services::spotify::routes::current)
-              .service(services::spotify::routes::authorize)
-              .service(services::spotify::routes::setup),
-          )
-          .service(
-            web::scope("/blog")
-              .service(services::blog::auth::login)
-              .service(services::blog::posts::get_post)
-              .service(services::blog::posts::get_posts)
-              .service(
-                web::scope("/admin")
-                  .wrap(from_fn(
-                    services::blog::middleware::blog_admin_auth_mw,
-                  ))
-                  .service(services::blog::auth::logout)
-                  .service(services::blog::auth::get_user)
-                  .service(services::blog::auth::update_user)
-                  .service(services::blog::auth::change_password)
-                  .service(services::blog::posts::get_all_posts)
-                  .service(services::blog::posts::create_post)
-                  .service(services::blog::posts::update_post)
-                  .service(services::blog::posts::delete_post)
-                  .service(services::blog::assets::get_assets_for_post)
-                  .service(services::blog::assets::upload_asset_for_post)
-                  .service(services::blog::assets::delete_asset_for_post),
-              ),
-          ),
+          .service(services::uploads::factory::uploads_factory())
+          .service(services::spotify::factory::spotify_factory())
+          .service(services::blog::factory::blog_factory()),
       )
   })
   .bind(((config.listen_host).to_owned(), config.listen_port))?

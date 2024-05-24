@@ -1,9 +1,17 @@
 FROM clux/muslrust AS builder
 
+RUN apt update
+RUN apt install wget -y
+RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+RUN dpkg -i libssl1.1_1.1.0g-2ubuntu4_amd64.deb
+
 WORKDIR /app
 
 COPY . .
 
+RUN cargo prisma generate
+
+RUN ls -lha src/connectivity/
 RUN cargo build --release
 
 FROM alpine

@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 extern crate serde_json;
 
+#[derive(Deserialize, Debug)]
+pub struct RecentSongQuery {
+  pub limit: Option<i64>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerState {
   pub device: Device,

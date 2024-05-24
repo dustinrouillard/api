@@ -94,6 +94,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
           .service(services::base::health)
           .service(services::uploads::factory::uploads_factory())
           .service(services::spotify::factory::spotify_factory())
+          .service(services::github::factory::github_factory())
           .service(services::blog::factory::blog_factory()),
       )
   })

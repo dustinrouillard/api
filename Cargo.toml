@@ -33,6 +33,7 @@ bytes = "1.6.0"
 once_cell = "1.19.0"
 sha1 = "0.10.6"
 hex = "0.4.3"
+gql_client = "1.0.7"
 
 [profile.release]
 lto = true

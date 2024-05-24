@@ -34,7 +34,7 @@ async fn get_posts(
     .find_many(vec![blog_posts::visibility::equals("public".to_string())])
     .take(query.limit.unwrap_or(25))
     .skip(query.offset.unwrap_or(0))
-    .order_by(blog_posts::published_at::order(Direction::Asc))
+    .order_by(blog_posts::published_at::order(Direction::Desc))
     .exec()
     .await;
 
@@ -81,7 +81,7 @@ async fn get_all_posts(
     .find_many(vec![])
     .take(query.limit.unwrap_or(25))
     .skip(query.offset.unwrap_or(0))
-    .order_by(blog_posts::created_at::order(Direction::Asc))
+    .order_by(blog_posts::created_at::order(Direction::Desc))
     .exec()
     .await;
 

@@ -53,7 +53,7 @@ async fn recent_listens(
     .find_many(vec![])
     .order_by(spotify_history::listened_at::order(Direction::Desc))
     .take(query.limit.unwrap_or(10))
-    .include(spotify_history::include!({ spotify_devices: select { id name r#type } }))
+    .include(spotify_history::include!({ spotify_devices: select { name r#type } }))
     .exec()
     .await;
 

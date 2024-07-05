@@ -20,8 +20,7 @@ async fn upload_to_cdn(
   {
     return Ok(
       HttpResponse::BadRequest()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "invalid_asset_type"}).to_string()),
+        .json(json!({"code": "invalid_asset_type"})),
     );
   }
 
@@ -34,8 +33,7 @@ async fn upload_to_cdn(
         if asset_type.to_string() == "images" {
           return Ok(
             HttpResponse::BadRequest()
-              .append_header(("Content-type", "application/json"))
-              .body(json!({"code": "prohibited_file_type"}).to_string()),
+              .json(json!({"code": "prohibited_file_type"})),
           );
         }
 
@@ -69,8 +67,7 @@ async fn upload_to_cdn(
   if response.status_code() != 200 {
     return Ok(
       HttpResponse::BadRequest()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "failed_upload_to_s3"}).to_string()),
+        .json(json!({"code": "failed_upload_to_s3"})),
     );
   }
 
@@ -83,7 +80,6 @@ async fn upload_to_cdn(
 
   Ok(
     HttpResponse::Ok()
-      .append_header(("Content-type", "application/json"))
-      .body(json!({"data": { "url": format!("https://{alias_url}/{hash}.{ext}") }}).to_string()),
+      .json(json!({"data": { "url": format!("https://{alias_url}/{hash}.{ext}") }})),
   )
 }

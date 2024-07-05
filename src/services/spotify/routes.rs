@@ -31,11 +31,7 @@ async fn current(
   let valkey = &mut data.valkey.clone();
   let json = helpers::get_playing(valkey).await;
 
-  Ok(
-    HttpResponse::Ok()
-      .insert_header(("Content-Type", "application/json"))
-      .body(json!({"success": true, "data": &json}).to_string()),
-  )
+  Ok(HttpResponse::Ok().json(json!({"success": true, "data": &json})))
 }
 
 #[get("/recents")]
@@ -74,11 +70,7 @@ async fn recent_listens(
     })
     .collect();
 
-  Ok(
-    HttpResponse::Ok()
-      .insert_header(("Content-Type", "application/json"))
-      .body(json!({"recents": recents}).to_string()),
-  )
+  Ok(HttpResponse::Ok().json(json!({"recents": recents})))
 }
 
 #[get("/authorize")]
@@ -99,11 +91,7 @@ async fn authorize(
         "message": "Spotify is already setup."
     });
 
-    return Ok(
-      HttpResponse::BadRequest()
-        .insert_header(("Content-Type", "application/json"))
-        .body(json.to_string()),
-    );
+    return Ok(HttpResponse::BadRequest().body(json.to_string()));
   }
 
   let config = Config::init_from_env().unwrap();
@@ -113,11 +101,7 @@ async fn authorize(
   let url = format!("https://accounts.spotify.com/authorize?client_id={}&response_type=code&scope={}&redirect_uri={}", config.spotify_client_id, scope, redirect_uri);
   let json = json!({ "url": url });
 
-  Ok(
-    HttpResponse::Ok()
-      .append_header(("Content-type", "application/json"))
-      .body(json.to_string()),
-  )
+  Ok(HttpResponse::Ok().body(json.to_string()))
 }
 
 #[get("/setup")]
@@ -139,11 +123,7 @@ async fn setup(
         "message": "Spotify is already setup."
     });
 
-    return Ok(
-      HttpResponse::BadRequest()
-        .insert_header(("Content-Type", "application/json"))
-        .body(json.to_string()),
-    );
+    return Ok(HttpResponse::BadRequest().body(json.to_string()));
   }
 
   let config = Config::init_from_env().unwrap();

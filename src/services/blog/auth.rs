@@ -46,8 +46,7 @@ async fn login(
         if !valid {
           return Ok(
             HttpResponse::Unauthorized()
-              .append_header(("Content-type", "application/json"))
-              .body(json!({"code": "invalid_authentication"}).to_string()),
+              .json(json!({"code": "invalid_authentication"})),
           );
         }
 
@@ -65,22 +64,16 @@ async fn login(
 
         let response = json!({ "user": { "id": user.id, "username": user.username, "display_name": user.display_name, }, "session": { "token": session_token } });
 
-        Ok(
-          HttpResponse::Ok()
-            .append_header(("Content-type", "application/json"))
-            .body(response.to_string()),
-        )
+        Ok(HttpResponse::Ok().json(response))
       }
       None => Ok(
         HttpResponse::Unauthorized()
-          .append_header(("Content-type", "application/json"))
-          .body(json!({"code": "invalid_username"}).to_string()),
+          .json(json!({"code": "invalid_username"})),
       ),
     },
     Err(_) => Ok(
       HttpResponse::Unauthorized()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "failed_to_lookup_user"}).to_string()),
+        .json(json!({"code": "failed_to_lookup_user"})),
     ),
   }
 }
@@ -90,20 +83,13 @@ async fn get_user(req: HttpRequest) -> Result<HttpResponse, Error> {
   let exts = req.extensions_mut();
   let user = exts.get::<blog_admin_users::Data>().unwrap();
 
-  Ok(
-    HttpResponse::Ok()
-      .append_header(("Content-type", "application/json"))
-      .body(
-        json!({
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "display_name": user.display_name,
-            }
-        })
-        .to_string(),
-      ),
-  )
+  Ok(HttpResponse::Ok().json(json!({
+      "user": {
+          "id": user.id,
+          "username": user.username,
+          "display_name": user.display_name,
+      }
+  })))
 }
 
 #[patch("/me")]
@@ -142,20 +128,13 @@ async fn update_user(
     .await
     .unwrap();
 
-  Ok(
-    HttpResponse::Ok()
-      .append_header(("Content-type", "application/json"))
-      .body(
-        json!({
-            "user": {
-                "id": user_record.id,
-                "username": user_record.username,
-                "display_name": user_record.display_name,
-            }
-        })
-        .to_string(),
-      ),
-  )
+  Ok(HttpResponse::Ok().json(json!({
+      "user": {
+          "id": user_record.id,
+          "username": user_record.username,
+          "display_name": user_record.display_name,
+      }
+  })))
 }
 
 #[patch("/auth")]
@@ -172,8 +151,7 @@ async fn change_password(
   if body.password == body.new_password {
     return Ok(
       HttpResponse::BadRequest()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "old_and_new_passwords_match"}).to_string()),
+        .json(json!({"code": "old_and_new_passwords_match"})),
     );
   }
 
@@ -183,8 +161,7 @@ async fn change_password(
   if !valid {
     return Ok(
       HttpResponse::Unauthorized()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "current_password_invalid"}).to_string()),
+        .json(json!({"code": "current_password_invalid"})),
     );
   }
 

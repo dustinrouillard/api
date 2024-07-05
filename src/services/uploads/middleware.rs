@@ -27,8 +27,7 @@ pub async fn uploads_auth_mw(
         ServiceResponse::new(
           req.request().to_owned(),
           HttpResponse::Unauthorized()
-            .append_header(("Content-type", "application/json"))
-            .body(json!({"code": "missing_authentication"}).to_string()),
+            .json(json!({"code": "missing_authentication"})),
         )
         .map_into_boxed_body(),
       );
@@ -45,10 +44,7 @@ pub async fn uploads_auth_mw(
             ServiceResponse::new(
               req.request().to_owned(),
               HttpResponse::Unauthorized()
-                .append_header(("Content-type", "application/json"))
-                .body(
-                  json!({"code": "invalid_authentication"}).to_string(),
-                ),
+                .json(json!({"code": "invalid_authentication"})),
             )
             .map_into_boxed_body(),
           );

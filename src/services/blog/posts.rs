@@ -7,7 +7,7 @@ use actix_web::{
   web::{self},
   HttpResponse,
 };
-use prisma_client_rust::Direction;
+use prisma_client_rust::{operator::or, Direction};
 use serde_json::json;
 
 use crate::{
@@ -56,11 +56,7 @@ async fn get_posts(
     })
     .collect();
 
-  Ok(
-    HttpResponse::Ok()
-      .append_header(("Content-type", "application/json"))
-      .body(json!({"posts": posts}).to_string()),
-  )
+  Ok(HttpResponse::Ok().json(json!({"posts": posts})))
 }
 
 #[get("/posts")]
@@ -104,11 +100,7 @@ async fn get_all_posts(
     })
     .collect();
 
-  Ok(
-    HttpResponse::Ok()
-      .append_header(("Content-type", "application/json"))
-      .body(json!({"posts": posts}).to_string()),
-  )
+  Ok(HttpResponse::Ok().json(json!({"posts": posts})))
 }
 
 #[post("/posts")]
@@ -149,84 +141,75 @@ async fn create_post(
   let post = prisma.blog_posts().create(post_params).exec().await;
 
   match post {
-    Ok(post) => Ok(
-      HttpResponse::Created()
-        .append_header(("Content-type", "application/json"))
-        .body(
-          json!({
-              "post": {
-                  "id": post.id,
-                  "title": post.title,
-                  "slug": post.slug,
-                  "description": post.description,
-                  "image": post.image,
-                  "visibility": post.visibility,
-                  "tags": post.tags,
-                  "body": post.body,
-                  "created_at": post.created_at,
-                  "published_at": post.published_at,
-              }
-          })
-          .to_string(),
-        ),
-    ),
+    Ok(post) => Ok(HttpResponse::Created().json(json!({
+        "post": {
+            "id": post.id,
+            "title": post.title,
+            "slug": post.slug,
+            "description": post.description,
+            "image": post.image,
+            "visibility": post.visibility,
+            "tags": post.tags,
+            "body": post.body,
+            "created_at": post.created_at,
+            "published_at": post.published_at,
+        }
+    }))),
     Err(_) => {
       return Ok(
         HttpResponse::InternalServerError()
-          .append_header(("Content-type", "application/json"))
-          .body(
-            json!({"code": "uncaught_error_creating_post"}).to_string(),
-          ),
+          .json(json!({"code": "uncaught_error_creating_post"})),
       );
     }
   }
 }
 
-#[get("/posts/{id}")]
+#[get("/posts/{id_or_slug}")]
 async fn get_post(
-  id: web::Path<String>,
+  id_or_slug: web::Path<String>,
   state: web::Data<ServerState>,
 ) -> Result<HttpResponse, Error> {
   let prisma = &mut &state.prisma;
+
+  let post_query = match &id_or_slug.parse::<f64>() {
+    Ok(_) => blog_posts::id::equals(id_or_slug.to_string()),
+    Err(_) => blog_posts::slug::equals(id_or_slug.to_string()),
+  };
+
   let post = prisma
     .blog_posts()
-    .find_first(vec![blog_posts::id::equals(id.to_string())])
+    .find_first(vec![
+      post_query,
+      or(vec![
+        blog_posts::visibility::equals("public".to_string()),
+        blog_posts::visibility::equals("unlisted".to_string()),
+      ]),
+    ])
     .exec()
     .await;
 
   match post {
     Ok(post) => match post {
-      Some(post) => Ok(
-        HttpResponse::Ok()
-          .append_header(("Content-type", "application/json"))
-          .body(
-            json!({
-                "post": {
-                    "id": post.id,
-                    "title": post.title,
-                    "slug": post.slug,
-                    "description": post.description,
-                    "image": post.image,
-                    "visibility": post.visibility,
-                    "tags": post.tags,
-                    "body": post.body,
-                    "published_at": post.published_at,
-                }
-            })
-            .to_string(),
-          ),
-      ),
+      Some(post) => Ok(HttpResponse::Ok().json(json!({
+          "post": {
+              "id": post.id,
+              "title": post.title,
+              "slug": post.slug,
+              "description": post.description,
+              "image": post.image,
+              "visibility": post.visibility,
+              "tags": post.tags,
+              "body": post.body,
+              "published_at": post.published_at,
+          }
+      }))),
       None => Ok(
-        HttpResponse::NotFound()
-          .append_header(("Content-type", "application/json"))
-          .body(json!({"code": "post_not_found"}).to_string()),
+        HttpResponse::NotFound().json(json!({"code": "post_not_found"})),
       ),
     },
     Err(_) => {
       return Ok(
-        HttpResponse::NotFound()
-          .append_header(("Content-type", "application/json"))
-          .body(json!({"code": "post_not_found"}).to_string()),
+        HttpResponse::NotFound().json(json!({"code": "post_not_found"})),
       );
     }
   }
@@ -252,8 +235,7 @@ async fn update_post(
         None => {
           return Ok(
             HttpResponse::NotFound()
-              .append_header(("Content-type", "application/json"))
-              .body(json!({"code": "post_not_found"}).to_string()),
+              .json(json!({"code": "post_not_found"})),
           );
         }
       };
@@ -284,37 +266,31 @@ async fn update_post(
 
       match post_update {
         Err(_) => Ok(
-          HttpResponse::NotFound()
-            .append_header(("Content-type", "application/json"))
-            .body(json!({"code": "post_not_found"}).to_string()),
+          HttpResponse::NotFound().json(json!({"code": "post_not_found"})),
         ),
         Ok(post) => Ok(
-          HttpResponse::Ok()
-            .append_header(("Content-type", "application/json"))
-            .body(
-              json!({
-                  "post": {
-                      "id": post.id,
-                      "title": post.title,
-                      "slug": post.slug,
-                      "description": post.description,
-                      "image": post.image,
-                      "visibility": post.visibility,
-                      "tags": post.tags,
-                      "body": post.body,
-                      "created_at": post.created_at,
-                      "published_at": post.published_at,
-                  }
-              })
-              .to_string(),
-            ),
+          HttpResponse::Ok().body(
+            json!({
+                "post": {
+                    "id": post.id,
+                    "title": post.title,
+                    "slug": post.slug,
+                    "description": post.description,
+                    "image": post.image,
+                    "visibility": post.visibility,
+                    "tags": post.tags,
+                    "body": post.body,
+                    "created_at": post.created_at,
+                    "published_at": post.published_at,
+                }
+            })
+            .to_string(),
+          ),
         ),
       }
     }
     Err(_) => Ok(
-      HttpResponse::Unauthorized()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "post_not_found"}).to_string()),
+      HttpResponse::Unauthorized().json(json!({"code": "post_not_found"})),
     ),
   }
 }
@@ -338,8 +314,7 @@ async fn delete_post(
         None => {
           return Ok(
             HttpResponse::NotFound()
-              .append_header(("Content-type", "application/json"))
-              .body(json!({"code": "post_not_found"}).to_string()),
+              .json(json!({"code": "post_not_found"})),
           );
         }
       };
@@ -357,9 +332,7 @@ async fn delete_post(
     }
     Err(_) => {
       return Ok(
-        HttpResponse::NotFound()
-          .append_header(("Content-type", "application/json"))
-          .body(json!({"code": "post_not_found"}).to_string()),
+        HttpResponse::NotFound().json(json!({"code": "post_not_found"})),
       );
     }
   }

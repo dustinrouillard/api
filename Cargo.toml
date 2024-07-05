@@ -35,6 +35,11 @@ sha1 = "0.10.6"
 hex = "0.4.3"
 gql_client = "1.0.7"
 actix-cors = "0.7.0"
+prometheus = { version = "0.13.4", features = ["process"] }
+futures-util = "0.3.30"
+prometheus-http-query = "0.8.3"
+influxdb2 = "0.5.1"
+influxdb2-structmap = "0.2.0"
 
 [profile.release]
 lto = true

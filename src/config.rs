@@ -11,6 +11,9 @@ pub struct Config {
   #[envconfig(from = "LISTEN_PORT", default = "8080")]
   pub listen_port: u16,
 
+  #[envconfig(from = "METRICS_LISTEN_PORT", default = "8081")]
+  pub metrics_listen_port: u16,
+
   #[envconfig(
     from = "SPOTIFY_CLIENT_ID",
     default = "01ba26764aca4594a26f4cc59cd3f01f"
@@ -64,4 +67,28 @@ pub struct Config {
 
   #[envconfig(from = "GITHUB_PAT", default = "")]
   pub github_pat: String,
+
+  #[envconfig(from = "WEATHER_COORDS", default = "37.8283/-96.5795")]
+  pub weather_coords: String,
+
+  #[envconfig(
+    from = "PROMETHEUS_HOST",
+    default = "https://prometheus.monit.kush/"
+  )]
+  pub prometheus_host: String,
+
+  #[envconfig(from = "INFLUXDB_TOKEN", default = "")]
+  pub influxdb_token: String,
+
+  #[envconfig(
+    from = "INFLUXDB_HOST",
+    default = "http://influxdb.kube-system"
+  )]
+  pub influxdb_host: String,
+
+  #[envconfig(from = "INFLUXDB_ORG", default = "lab")]
+  pub influxdb_org: String,
+
+  #[envconfig(from = "INFLUXDB_BUCKET", default = "api")]
+  pub influxdb_bucket: String,
 }

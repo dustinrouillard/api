@@ -32,8 +32,7 @@ pub async fn blog_admin_auth_mw(
         ServiceResponse::new(
           req.request().to_owned(),
           HttpResponse::Unauthorized()
-            .append_header(("Content-type", "application/json"))
-            .body(json!({"code": "missing_authentication"}).to_string()),
+            .json(json!({"code": "missing_authentication"})),
         )
         .map_into_boxed_body(),
       );
@@ -50,11 +49,7 @@ pub async fn blog_admin_auth_mw(
             ServiceResponse::new(
               req.request().to_owned(),
               HttpResponse::Unauthorized()
-                .append_header(("Content-type", "application/json"))
-                .body(
-                  json!({"code": "invalid_authentication_state"})
-                    .to_string(),
-                ),
+                .json(json!({"code": "invalid_authentication_state"})),
             )
             .map_into_boxed_body(),
           );
@@ -91,12 +86,9 @@ pub async fn blog_admin_auth_mw(
                 return Ok(
                   ServiceResponse::new(
                     req.request().to_owned(),
-                    HttpResponse::Unauthorized()
-                      .append_header(("Content-type", "application/json"))
-                      .body(
-                        json!({"code": "invalid_authentication_user"})
-                          .to_string(),
-                      ),
+                    HttpResponse::Unauthorized().json(
+                      json!({"code": "invalid_authentication_user"}),
+                    ),
                   )
                   .map_into_boxed_body(),
                 )
@@ -107,11 +99,7 @@ pub async fn blog_admin_auth_mw(
                 ServiceResponse::new(
                   req.request().to_owned(),
                   HttpResponse::Unauthorized()
-                    .append_header(("Content-type", "application/json"))
-                    .body(
-                      json!({"code": "invalid_authentication_user"})
-                        .to_string(),
-                    ),
+                    .json(json!({"code": "invalid_authentication_user"})),
                 )
                 .map_into_boxed_body(),
               );

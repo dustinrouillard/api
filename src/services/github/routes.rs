@@ -91,9 +91,5 @@ async fn github_pinned(
     serde_json::from_str(&cached.unwrap()).unwrap()
   };
 
-  Ok(
-    HttpResponse::Ok()
-      .insert_header(("Content-Type", "application/json"))
-      .body(json!({"repositories": response}).to_string()),
-  )
+  Ok(HttpResponse::Ok().json(json!({"repositories": response})))
 }

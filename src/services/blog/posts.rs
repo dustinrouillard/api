@@ -7,6 +7,7 @@ use actix_web::{
   web::{self},
   HttpResponse,
 };
+use chrono::{DateTime, FixedOffset, Utc};
 use prisma_client_rust::{operator::or, Direction};
 use serde_json::json;
 
@@ -240,7 +241,21 @@ async fn update_post(
         }
       };
 
+      let intended_visibility = if let Some(visibility) = &body.visibility
+      {
+        visibility
+      } else {
+        &post.visibility
+      };
       let body = body.clone();
+
+      let mut published_at: Option<DateTime<FixedOffset>> = None;
+      if post.published_at == None && intended_visibility == "public" {
+        // Post was made public, we need to do all the thing here to make sure hooks are sent
+        // any notifications are sent out, etc.
+        // and also make sure published at is set in the database.
+        published_at = Some(Utc::now().fixed_offset());
+      }
 
       let post_params: Vec<blog_posts::SetParam> = vec![
         body.title.clone().map(blog_posts::title::set),
@@ -252,6 +267,9 @@ async fn update_post(
         }),
         body.body.clone().map(|value: std::string::String| {
           blog_posts::body::set(Some(value))
+        }),
+        published_at.clone().map(|value: DateTime<FixedOffset>| {
+          blog_posts::published_at::set(Some(value))
         }),
       ]
       .into_iter()
@@ -268,25 +286,20 @@ async fn update_post(
         Err(_) => Ok(
           HttpResponse::NotFound().json(json!({"code": "post_not_found"})),
         ),
-        Ok(post) => Ok(
-          HttpResponse::Ok().body(
-            json!({
-                "post": {
-                    "id": post.id,
-                    "title": post.title,
-                    "slug": post.slug,
-                    "description": post.description,
-                    "image": post.image,
-                    "visibility": post.visibility,
-                    "tags": post.tags,
-                    "body": post.body,
-                    "created_at": post.created_at,
-                    "published_at": post.published_at,
-                }
-            })
-            .to_string(),
-          ),
-        ),
+        Ok(post) => Ok(HttpResponse::Ok().json(json!({
+            "post": {
+                "id": post.id,
+                "title": post.title,
+                "slug": post.slug,
+                "description": post.description,
+                "image": post.image,
+                "visibility": post.visibility,
+                "tags": post.tags,
+                "body": post.body,
+                "created_at": post.created_at,
+                "published_at": post.published_at,
+            }
+        }))),
       }
     }
     Err(_) => Ok(

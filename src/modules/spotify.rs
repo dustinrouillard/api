@@ -14,9 +14,6 @@ use crate::{
   ServerState,
 };
 
-extern crate chrono;
-extern crate serde_json;
-
 pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
   let valkey = &mut data.valkey.clone();
   let rabbit = &mut data.rabbit.clone();

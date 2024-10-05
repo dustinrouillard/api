@@ -84,6 +84,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ));
       }
     });
+  } else {
+    tracing::debug!("Spotify runner skipped due to being in DEV Mode")
   }
 
   let api_server = HttpServer::new(move || {
@@ -113,6 +115,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
           .service(services::base::health)
           .service(services::analytics::factory::analytics_factory())
           .service(services::weather::factory::weather_factory())
+          .service(services::hooks::factory::hooks_factory())
+          .service(services::boosted::factory::boosted_factory())
           .service(services::uploads::factory::uploads_factory())
           .service(services::spotify::factory::spotify_factory())
           .service(services::github::factory::github_factory())

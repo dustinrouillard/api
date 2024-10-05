@@ -5,10 +5,10 @@ pub struct Config {
   #[envconfig(from = "ENV", default = "dev")]
   pub env: String,
 
-  #[envconfig(from = "LISTEN_HOST", default = "0.0.0.0")]
+  #[envconfig(from = "HOST", default = "0.0.0.0")]
   pub listen_host: String,
 
-  #[envconfig(from = "LISTEN_PORT", default = "8080")]
+  #[envconfig(from = "PORT", default = "8080")]
   pub listen_port: u16,
 
   #[envconfig(from = "METRICS_LISTEN_PORT", default = "8081")]
@@ -91,4 +91,16 @@ pub struct Config {
 
   #[envconfig(from = "INFLUXDB_BUCKET", default = "api")]
   pub influxdb_bucket: String,
+
+  #[envconfig(from = "BOOSTED_HOOK_SECRET", default = "")]
+  pub boosted_hook_token: String,
+
+  #[envconfig(
+    from = "BOOSTED_API_ENDPOINT",
+    default = "https://boosted-rides.dstn.to"
+  )]
+  pub boosted_api_endpoint: String,
+
+  #[envconfig(from = "BOOSTED_API_TOKEN", default = "")]
+  pub boosted_api_token: String,
 }

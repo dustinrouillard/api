@@ -91,7 +91,7 @@ async fn authorize(
         "message": "Spotify is already setup."
     });
 
-    return Ok(HttpResponse::BadRequest().body(json.to_string()));
+    return Ok(HttpResponse::BadRequest().json(json));
   }
 
   let config = Config::init_from_env().unwrap();
@@ -101,7 +101,7 @@ async fn authorize(
   let url = format!("https://accounts.spotify.com/authorize?client_id={}&response_type=code&scope={}&redirect_uri={}", config.spotify_client_id, scope, redirect_uri);
   let json = json!({ "url": url });
 
-  Ok(HttpResponse::Ok().body(json.to_string()))
+  Ok(HttpResponse::Ok().json(json))
 }
 
 #[get("/setup")]
@@ -123,7 +123,7 @@ async fn setup(
         "message": "Spotify is already setup."
     });
 
-    return Ok(HttpResponse::BadRequest().body(json.to_string()));
+    return Ok(HttpResponse::BadRequest().json(json));
   }
 
   let config = Config::init_from_env().unwrap();

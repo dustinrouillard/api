@@ -45,8 +45,7 @@ async fn upload_asset_for_post(
   if response.status_code() != 200 {
     return Ok(
       HttpResponse::BadRequest()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "failed_upload_to_s3"}).to_string()),
+        .json(json!({"code": "failed_upload_to_s3"})),
     );
   }
 
@@ -68,22 +67,18 @@ async fn upload_asset_for_post(
   match asset {
     Err(error) if error.is_prisma_error::<UniqueKeyViolation>() => Ok(
         HttpResponse::BadRequest()
-        .append_header(("Content-type", "application/json"))
-        .body(json!({"code": "asset_already_exists"}).to_string()),
+        .json(json!({"code": "asset_already_exists"})),
     ),
     Err(_) => {
       Ok(
         HttpResponse::BadRequest()
-          .append_header(("Content-type", "application/json"))
-          .body(json!({"code": "failed_to_create_asset"}).to_string()),
+          .json(json!({"code": "failed_to_create_asset"})),
       )
     },
     Ok(asset) => Ok(
         HttpResponse::Ok()
-          .append_header(("Content-type", "application/json"))
-          .body(
-            json!({"asset": { "hash": hash, "post_id": post_id.to_string(), "file_type": ext, "file_size": size, "upload_date": asset.upload_date }})
-              .to_string(),
+          .json(
+            json!({"asset": { "hash": hash, "post_id": post_id.to_string(), "file_type": ext, "file_size": size, "upload_date": asset.upload_date }}),
           ),
       ),
   }
@@ -117,11 +112,7 @@ async fn get_assets_for_post(
     })
     .collect();
 
-  Ok(
-    HttpResponse::Ok()
-      .append_header(("Content-type", "application/json"))
-      .body(json!({"assets": assets}).to_string()),
-  )
+  Ok(HttpResponse::Ok().json(json!({"assets": assets})))
 }
 
 #[delete("/posts/{id}/assets/{hash}")]
@@ -155,16 +146,9 @@ async fn delete_asset_for_post(
           .await;
 
         if res.unwrap().status_code() != 204 {
-          return Ok(
-            HttpResponse::BadRequest()
-              .append_header(("Content-type", "application/json"))
-              .body(
-                json!({
-                  "code": "failed_to_delete_from_s3"
-                })
-                .to_string(),
-              ),
-          );
+          return Ok(HttpResponse::BadRequest().json(json!({
+            "code": "failed_to_delete_from_s3"
+          })));
         }
 
         let _ = prisma
@@ -175,26 +159,12 @@ async fn delete_asset_for_post(
 
         Ok(HttpResponse::NoContent().finish())
       }
-      None => Ok(
-        HttpResponse::NotFound()
-          .append_header(("Content-type", "application/json"))
-          .body(
-            json!({
-              "code": "asset_not_found"
-            })
-            .to_string(),
-          ),
-      ),
+      None => Ok(HttpResponse::NotFound().json(json!({
+        "code": "asset_not_found"
+      }))),
     },
-    Err(_) => Ok(
-      HttpResponse::BadRequest()
-        .append_header(("Content-type", "application/json"))
-        .body(
-          json!({
-            "code": "error_with_asset_lookup"
-          })
-          .to_string(),
-        ),
-    ),
+    Err(_) => Ok(HttpResponse::BadRequest().json(json!({
+      "code": "error_with_asset_lookup"
+    }))),
   }
 }

@@ -91,6 +91,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
   let api_server = HttpServer::new(move || {
     let cors = Cors::default()
       .allowed_origin_fn(|origin, _req_head| {
+        origin.as_bytes().ends_with(b"dstn.to")
+      })
+      .allowed_origin_fn(|origin, _req_head| {
         origin.as_bytes().ends_with(b".dstn.to")
       })
       .allowed_origin_fn(|origin, _req_head| {

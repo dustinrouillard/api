@@ -4,6 +4,7 @@ use redis::aio::ConnectionManager;
 
 use crate::{
   config::Config,
+  helpers::boosted::send_boosted_event,
   services::hooks::structs::{BoostedHookPayload, BoostedHookType},
   ServerState,
 };
@@ -28,6 +29,7 @@ async fn execute(
   }
 
   let valkey = &mut state.valkey.clone();
+  let rabbit = &mut state.rabbit.clone();
 
   match payload.hook_type {
     BoostedHookType::RideStarted => {
@@ -36,18 +38,24 @@ async fn execute(
         .arg("true")
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
+
+      send_boosted_event(valkey, rabbit).await;
     }
     BoostedHookType::RideEnded => {
       let _ = redis::cmd("DEL")
         .arg("boosted/in-ride")
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
+
+      send_boosted_event(valkey, rabbit).await;
     }
     BoostedHookType::RideDiscarded => {
       let _ = redis::cmd("DEL")
         .arg("boosted/in-ride")
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
+
+      send_boosted_event(valkey, rabbit).await;
     }
   }
 

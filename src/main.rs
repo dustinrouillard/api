@@ -1,5 +1,6 @@
 pub mod config;
 pub mod connectivity;
+pub mod helpers;
 pub mod modules;
 pub mod services;
 pub mod structs;

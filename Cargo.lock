@@ -470,6 +470,7 @@ dependencies = [
  "rust-s3",
  "serde",
  "serde_json",
+ "serde_repr",
  "serde_urlencoded",
  "serde_with",
  "sha1",

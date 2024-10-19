@@ -6,13 +6,15 @@ use lapin::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
   config::Config,
   structs::{boosted::BoostedRideUpdate, spotify::CurrentPlaying},
 };
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize_repr, Deserialize_repr, Clone, Debug)]
+#[repr(u8)]
 pub enum RabbitEvent {
   SpotifyUpdate,
   BoostedUpdate,

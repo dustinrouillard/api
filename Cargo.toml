@@ -40,6 +40,7 @@ futures-util = "0.3.30"
 prometheus-http-query = "0.8.3"
 influxdb2 = "0.5.1"
 influxdb2-structmap = "0.2.0"
+serde_repr = "0.1.19"
 
 [profile.release]
 lto = true

@@ -12,6 +12,11 @@ use crate::{
   structs::{boosted::BoostedRideUpdate, spotify::CurrentPlaying},
 };
 
+pub enum RabbitEvent {
+  SpotifyUpdate,
+  BoostedUpdate,
+}
+
 #[derive(Clone)]
 pub struct RabbitManager {
   pub channel: Channel,
@@ -20,7 +25,7 @@ pub struct RabbitManager {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct RabbitEventsData<Data = Value> {
-  t: u8,
+  t: RabbitEvent,
   d: Data,
 }
 
@@ -55,7 +60,7 @@ impl RabbitManager {
 
   pub async fn publish_ride_state(&mut self, data: &BoostedRideUpdate) {
     let message = RabbitEventsData {
-      t: 0,
+      t: RabbitEvent::BoostedUpdate,
       d: data.to_owned(),
     };
     let json = serde_json::to_string(&message).unwrap();
@@ -75,7 +80,7 @@ impl RabbitManager {
 
   pub async fn publish_spotify_current(&mut self, data: &CurrentPlaying) {
     let message = RabbitEventsData {
-      t: 0,
+      t: RabbitEvent::SpotifyUpdate,
       d: data.to_owned(),
     };
     let json = serde_json::to_string(&message).unwrap();
@@ -94,7 +99,8 @@ impl RabbitManager {
   }
 
   pub async fn publish_spotify_not_playing(&mut self) {
-    let json = json!({"t": 0, "d": {"playing": false}});
+    let json =
+      json!({"t": RabbitEvent::SpotifyUpdate, "d": {"playing": false}});
 
     self
       .channel

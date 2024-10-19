@@ -12,6 +12,7 @@ use crate::{
   structs::{boosted::BoostedRideUpdate, spotify::CurrentPlaying},
 };
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum RabbitEvent {
   SpotifyUpdate,
   BoostedUpdate,

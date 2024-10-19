@@ -9,6 +9,8 @@ pub enum BoostedHookType {
   RideEnded,
   #[serde(rename = "ride_discarded")]
   RideDiscarded,
+  #[serde(rename = "board_updated")]
+  BoardUpdated,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,6 +42,14 @@ pub struct RideEndedHookBody {
 pub struct RideDiscardedHookBody {
   pub ride_id: i64,
   pub code: String,
+}
+
+pub struct BoardUpdatedHookBody {
+  pub board_id: i64,
+  pub board_name: String,
+  pub board_serial: String,
+  pub board_odometer: f64,
+  pub board_battery: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

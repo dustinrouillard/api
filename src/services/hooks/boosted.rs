@@ -57,6 +57,9 @@ async fn execute(
 
       send_boosted_event(valkey, rabbit).await;
     }
+    BoostedHookType::BoardUpdated => {
+      send_boosted_event(valkey, rabbit).await;
+    }
   }
 
   Ok(HttpResponse::NoContent().finish())

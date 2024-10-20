@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BoostedStats {
-  pub current_ride: CurrentRideStats,
+  pub current_ride: Option<CurrentRideStats>,
   pub latest_ride: RideStats,
   pub stats: Stats,
 }

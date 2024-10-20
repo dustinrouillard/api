@@ -33,6 +33,7 @@ async fn ride_stats(
 
   Ok(HttpResponse::Ok().json(json!({"boosted": {
     "riding": in_ride,
+    "current_ride": json.current_ride,
     "latest_ride": json.latest_ride,
     "stats": json.stats
   }})))

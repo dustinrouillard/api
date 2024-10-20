@@ -33,6 +33,7 @@ pub async fn send_boosted_event(
 
   let state = BoostedRideUpdate {
     riding: in_ride,
+    current_ride: json.current_ride,
     latest_ride: json.latest_ride,
     stats: json.stats,
   };

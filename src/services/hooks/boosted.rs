@@ -1,6 +1,10 @@
 use actix_web::{http::Error, post, web, HttpRequest, HttpResponse};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use envconfig::Envconfig as _;
+use hmac::{Hmac, Mac};
 use redis::aio::ConnectionManager;
+use sha2::Sha256;
 
 use crate::{
   config::Config,
@@ -17,14 +21,32 @@ async fn execute(
 ) -> Result<HttpResponse, Error> {
   let config = Config::init_from_env().unwrap();
 
-  let auth_header = req.headers().get("authorization");
+  let auth_header = req.headers().get("x-hook-signature");
   if auth_header.is_none() {
     return Ok(HttpResponse::BadRequest().finish());
   }
 
-  let auth_header = auth_header.unwrap().to_str().unwrap();
+  let received_signature = auth_header.unwrap().to_str().unwrap();
+  let received_signature_bytes = match STANDARD.decode(received_signature)
+  {
+    Ok(bytes) => bytes,
+    Err(_) => {
+      return Ok(
+        HttpResponse::BadRequest().body("Invalid signature encoding"),
+      )
+    }
+  };
 
-  if auth_header != config.boosted_hook_token {
+  let mut mac =
+    Hmac::<Sha256>::new_from_slice(config.boosted_hook_token.as_bytes())
+      .expect("HMAC can take key of any size");
+  let payload_string =
+    serde_json::to_string::<BoostedHookPayload>(&payload)
+      .unwrap_or("".into());
+  mac.update(payload_string.as_bytes());
+
+  let expected_signature = mac.finalize().into_bytes().to_vec();
+  if expected_signature != received_signature_bytes {
     return Ok(HttpResponse::BadRequest().finish());
   }
 

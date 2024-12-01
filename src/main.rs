@@ -74,8 +74,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
   let data_http = web::Data::clone(&data);
 
   // Fetch spotify current playing every second.
-  let mut interval = time::interval(Duration::from_secs(1));
   if config.env != "dev" {
+    let mut interval = time::interval(Duration::from_secs(1));
     tokio::spawn(async move {
       interval.tick().await;
       loop {

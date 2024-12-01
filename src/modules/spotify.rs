@@ -47,34 +47,30 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
         ArtistName { name }
       }
 
-      if json.is_playing {
+      if json.is_playing && json.item.is_some() {
+        let item = json.item.unwrap();
         let mut image: String = String::from("none");
         let mut artists: Vec<ArtistName> = [].to_vec();
 
-        if json.item.album.is_some() && json.item.artists.is_some() {
-          image = json.item.album.unwrap().images[0].url.to_string();
-          artists = json
-            .item
-            .artists
-            .unwrap()
-            .into_iter()
-            .map(get_name)
-            .collect();
-        } else if json.item.show.is_some() {
-          let show = json.item.show.unwrap();
+        if item.album.is_some() && item.artists.is_some() {
+          image = item.album.unwrap().images[0].url.to_string();
+          artists =
+            item.artists.unwrap().into_iter().map(get_name).collect();
+        } else if item.show.is_some() {
+          let show = item.show.unwrap();
           image = show.images[0].url.to_string();
           artists = [ArtistName { name: show.name }].to_vec()
         }
 
         let current = CurrentPlaying {
-          id: Some(json.item.id),
-          name: Some(json.item.name),
+          id: Some(item.id),
+          name: Some(item.name),
           current_playing_type: Some(
-            json.item.item_type.unwrap_or_else(|| String::from("track")),
+            item.item_type.unwrap_or_else(|| String::from("track")),
           ),
           playing: json.is_playing,
           artists: Some(artists),
-          length: Some(json.item.duration_ms),
+          length: Some(item.duration_ms),
           progress: Some(json.progress_ms),
           image: Some(image),
           device: Some(DeviceRewrite {

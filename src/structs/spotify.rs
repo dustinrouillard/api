@@ -15,7 +15,7 @@ pub struct PlayerState {
   pub timestamp: i64,
   pub context: Option<Context>,
   pub progress_ms: i64,
-  pub item: Item,
+  pub item: Option<Item>,
   #[serde(rename = "type")]
   pub currently_playing_type: Option<String>,
   pub is_playing: bool,

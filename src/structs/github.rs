@@ -1,13 +1,50 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
+pub struct ContributionsData {
+  pub viewer: ViewerWithContributions,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewerWithContributions {
+  pub contributions_collection: ContributionsCollectionClass,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContributionsCollectionClass {
+  pub contribution_calendar: ContributionCalendar,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContributionCalendar {
+  pub total_contributions: i64,
+  pub weeks: Vec<Week>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Week {
+  pub contribution_days: Vec<ContributionDay>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContributionDay {
+  pub contribution_count: i64,
+  pub date: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Data {
-  pub user: User,
+pub struct GithubPinned {
+  pub user: UserWithPins,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct User {
+pub struct UserWithPins {
   pub pinned_items: PinnedItems,
 }
 

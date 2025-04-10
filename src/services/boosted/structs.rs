@@ -32,7 +32,7 @@ pub struct Stats {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Board {
-  pub id: i64,
+  pub id: String,
   pub name: String,
   pub odometer: f64,
   pub battery: f64,

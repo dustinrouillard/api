@@ -15,12 +15,11 @@ pub enum BoostedHookType {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RideSummary {
-  pub ride_id: i64,
+  pub id: String,
+  pub duration: u64,
   pub distance: f64,
   pub max_speed: f64,
   pub avg_speed: f64,
-  pub elevation_gain: Option<f64>,
-  pub elevation_loss: Option<f64>,
   pub ride_points: usize,
   pub start_time: DateTime<FixedOffset>,
   pub end_time: DateTime<FixedOffset>,

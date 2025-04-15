@@ -61,7 +61,7 @@ async fn execute(
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 
-      send_boosted_event(valkey, rabbit).await;
+      send_boosted_event(rabbit).await;
     }
     BoostedHookType::RideEnded => {
       let _ = redis::cmd("DEL")
@@ -69,7 +69,7 @@ async fn execute(
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 
-      send_boosted_event(valkey, rabbit).await;
+      send_boosted_event(rabbit).await;
     }
     BoostedHookType::RideDiscarded => {
       let _ = redis::cmd("DEL")
@@ -77,10 +77,10 @@ async fn execute(
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 
-      send_boosted_event(valkey, rabbit).await;
+      send_boosted_event(rabbit).await;
     }
     BoostedHookType::BoardUpdated => {
-      send_boosted_event(valkey, rabbit).await;
+      send_boosted_event(rabbit).await;
     }
   }
 

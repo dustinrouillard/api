@@ -8,7 +8,6 @@ use crate::services::boosted::structs::{
 #[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BoostedRideUpdate {
-  pub riding: bool,
   pub current_ride: Option<CurrentRideStats>,
   pub latest_ride: RideStats,
   pub stats: Stats,

@@ -8,16 +8,16 @@ use sha2::Sha256;
 
 use crate::{
   config::Config,
-  helpers::boosted::send_boosted_event,
-  services::hooks::structs::{BoostedHookPayload, BoostedHookType},
+  helpers::riderr::send_riderr_event,
+  services::hooks::structs::{RiderrHookPayload, RiderrHookType},
   ServerState,
 };
 
-#[post("/boosted")]
+#[post("/riderr")]
 async fn execute(
   req: HttpRequest,
   state: web::Data<ServerState>,
-  payload: web::Json<BoostedHookPayload>,
+  payload: web::Json<RiderrHookPayload>,
 ) -> Result<HttpResponse, Error> {
   let config = Config::init_from_env().unwrap();
 
@@ -38,10 +38,10 @@ async fn execute(
   };
 
   let mut mac =
-    Hmac::<Sha256>::new_from_slice(config.boosted_hook_token.as_bytes())
+    Hmac::<Sha256>::new_from_slice(config.riderr_hook_token.as_bytes())
       .expect("HMAC can take key of any size");
   let payload_string =
-    serde_json::to_string::<BoostedHookPayload>(&payload)
+    serde_json::to_string::<RiderrHookPayload>(&payload)
       .unwrap_or("".into());
   mac.update(payload_string.as_bytes());
 
@@ -54,33 +54,33 @@ async fn execute(
   let rabbit = &mut state.rabbit.clone();
 
   match payload.hook_type {
-    BoostedHookType::RideStarted => {
+    RiderrHookType::RideStarted => {
       let _ = redis::cmd("SET")
-        .arg("boosted/in-ride")
+        .arg("riderr/in-ride")
         .arg("true")
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 
-      send_boosted_event(rabbit).await;
+      send_riderr_event(rabbit).await;
     }
-    BoostedHookType::RideEnded => {
+    RiderrHookType::RideEnded => {
       let _ = redis::cmd("DEL")
-        .arg("boosted/in-ride")
+        .arg("riderr/in-ride")
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 
-      send_boosted_event(rabbit).await;
+      send_riderr_event(rabbit).await;
     }
-    BoostedHookType::RideDiscarded => {
+    RiderrHookType::RideDiscarded => {
       let _ = redis::cmd("DEL")
-        .arg("boosted/in-ride")
+        .arg("riderr/in-ride")
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 
-      send_boosted_event(rabbit).await;
+      send_riderr_event(rabbit).await;
     }
-    BoostedHookType::BoardUpdated => {
-      send_boosted_event(rabbit).await;
+    RiderrHookType::BoardUpdated => {
+      send_riderr_event(rabbit).await;
     }
   }
 

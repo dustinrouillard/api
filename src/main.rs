@@ -120,7 +120,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
           .service(services::analytics::factory::analytics_factory())
           .service(services::weather::factory::weather_factory())
           .service(services::hooks::factory::hooks_factory())
-          .service(services::boosted::factory::boosted_factory())
+          .service(services::riderr::factory::riderr_factory())
           .service(services::uploads::factory::uploads_factory())
           .service(services::spotify::factory::spotify_factory())
           .service(services::github::factory::github_factory())

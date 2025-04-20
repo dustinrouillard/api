@@ -10,14 +10,14 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
   config::Config,
-  structs::{boosted::BoostedRideUpdate, spotify::CurrentPlaying},
+  structs::{riderr::RiderrRideUpdate, spotify::CurrentPlaying},
 };
 
 #[derive(Serialize_repr, Deserialize_repr, Clone, Debug)]
 #[repr(u8)]
 pub enum RabbitEvent {
   SpotifyUpdate,
-  BoostedUpdate,
+  RiderrUpdate,
 }
 
 #[derive(Clone)]
@@ -61,9 +61,9 @@ impl RabbitManager {
     Self { channel, queue }
   }
 
-  pub async fn publish_ride_state(&mut self, data: &BoostedRideUpdate) {
+  pub async fn publish_ride_state(&mut self, data: &RiderrRideUpdate) {
     let message = RabbitEventsData {
-      t: RabbitEvent::BoostedUpdate,
+      t: RabbitEvent::RiderrUpdate,
       d: data.to_owned(),
     };
     let json = serde_json::to_string(&message).unwrap();

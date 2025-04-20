@@ -2,7 +2,7 @@ use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum BoostedHookType {
+pub enum RiderrHookType {
   #[serde(rename = "ride_started")]
   RideStarted,
   #[serde(rename = "ride_ended")]
@@ -52,7 +52,7 @@ pub struct BoardUpdatedHookBody {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BoostedHookPayload {
-  pub hook_type: BoostedHookType,
+pub struct RiderrHookPayload {
+  pub hook_type: RiderrHookType,
   pub body: serde_json::Value,
 }

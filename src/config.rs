@@ -92,15 +92,15 @@ pub struct Config {
   #[envconfig(from = "INFLUXDB_BUCKET", default = "api")]
   pub influxdb_bucket: String,
 
-  #[envconfig(from = "BOOSTED_HOOK_SECRET", default = "")]
-  pub boosted_hook_token: String,
+  #[envconfig(from = "RIDERR_HOOK_SECRET", default = "")]
+  pub riderr_hook_token: String,
 
   #[envconfig(
-    from = "BOOSTED_API_ENDPOINT",
-    default = "https://boosted-rides.dstn.to"
+    from = "RIDERR_API_ENDPOINT",
+    default = "https://api.riderr.app"
   )]
-  pub boosted_api_endpoint: String,
+  pub riderr_api_endpoint: String,
 
-  #[envconfig(from = "BOOSTED_API_TOKEN", default = "")]
-  pub boosted_api_token: String,
+  #[envconfig(from = "RIDERR_API_TOKEN", default = "")]
+  pub riderr_api_token: String,
 }

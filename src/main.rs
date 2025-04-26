@@ -125,7 +125,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
           .service(services::spotify::factory::spotify_factory())
           .service(services::github::factory::github_factory())
           .service(services::blog::factory::blog_factory())
-          .service(services::instagram::instagram_factory()),
+          .service(services::instagram::instagram_factory())
+          .service(services::settings::settings_factory()),
       )
   })
   .bind(((config.listen_host).to_owned(), config.listen_port))?

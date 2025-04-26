@@ -20,6 +20,7 @@ pub struct Datum {
   pub media_type: MediaType,
   pub media_product_type: MediaProductType,
   pub comments_count: i64,
+  pub like_count: i64,
   pub media_url: String,
   pub thumbnail_url: Option<String>,
   pub permalink: String,
@@ -47,20 +48,7 @@ pub enum MediaType {
 pub struct InstagramOverview {
   pub followers: i64,
   pub post_count: i64,
-  pub posts: Vec<InstagramPost>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InstagramPost {
-  pub id: String,
-  pub caption: String,
-  pub media_type: MediaType,
-  pub media_product_type: MediaProductType,
-  pub comments_count: i64,
-  pub media_url: String,
-  pub thumbnail_url: Option<String>,
-  pub permalink: String,
-  pub timestamp: String,
+  pub posts: Vec<Datum>,
 }
 
 impl From<InstagramMe> for InstagramOverview {
@@ -68,23 +56,7 @@ impl From<InstagramMe> for InstagramOverview {
     InstagramOverview {
       followers: me.follows_count,
       post_count: me.media_count,
-      posts: me.media.data.into_iter().map(|d| d.into()).collect(),
-    }
-  }
-}
-
-impl From<Datum> for InstagramPost {
-  fn from(me: Datum) -> Self {
-    InstagramPost {
-      id: me.id,
-      caption: me.caption,
-      media_type: me.media_type,
-      media_product_type: me.media_product_type,
-      comments_count: me.comments_count,
-      media_url: me.media_url,
-      thumbnail_url: me.thumbnail_url,
-      permalink: me.permalink,
-      timestamp: me.timestamp,
+      posts: me.media.data,
     }
   }
 }

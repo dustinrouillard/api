@@ -24,7 +24,7 @@ pub async fn get_overview(
   if let Ok(token) = access_token {
     let client = reqwest::Client::new();
     let url = format!(
-        "https://graph.instagram.com/me?fields=media_count,follows_count,media{{id,caption,media_type,media_product_type,comments_count,media_url,thumbnail_url,permalink,timestamp}}&access_token={}",
+        "https://graph.instagram.com/me?fields=media_count,follows_count,media{{id,caption,media_type,media_product_type,comments_count,like_count,media_url,thumbnail_url,permalink,timestamp}}&access_token={}",
         token
     );
 

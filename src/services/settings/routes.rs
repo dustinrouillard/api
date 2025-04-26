@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use actix_web::{get, http::Error, web, HttpResponse};
 use redis::AsyncCommands;
-use serde_json::{json, Value};
 
 use crate::{
   services::settings::structs::SiteSettingsResponse, ServerState,

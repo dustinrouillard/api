@@ -3,6 +3,7 @@ pub mod base;
 pub mod blog;
 pub mod github;
 pub mod hooks;
+pub mod instagram;
 pub mod riderr;
 pub mod spotify;
 pub mod uploads;

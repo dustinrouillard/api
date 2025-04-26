@@ -56,7 +56,7 @@ impl From<InstagramMe> for InstagramOverview {
     InstagramOverview {
       followers: me.follows_count,
       post_count: me.media_count,
-      posts: me.media.data,
+      posts: me.media.data.into_iter().take(10).collect(),
     }
   }
 }

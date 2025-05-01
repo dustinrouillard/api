@@ -9,9 +9,7 @@ use serde_json::json;
 use crate::{
   config::Config,
   connectivity::{
-    prisma::{
-      spotify_devices, spotify_history, spotify_history_alt, PrismaClient,
-    },
+    prisma::{spotify_devices, spotify_history, PrismaClient},
     valkey::ValkeyManager,
   },
   structs::spotify::{
@@ -239,7 +237,6 @@ pub async fn get_or_make_device(
 pub async fn store_history(
   prisma: &mut &PrismaClient,
   current_playing: Arc<CurrentPlaying>,
-  alt: Option<bool>,
 ) {
   let date: DateTime<FixedOffset> =
     Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap());
@@ -264,31 +261,29 @@ pub async fn store_history(
   }
 
   let current_playing = current_playing.as_ref().clone();
-  if alt.is_some_and(|b| b) {
-    prisma.spotify_history_alt().create(
-        current_playing.id.unwrap(),
-        current_playing.name.unwrap(),
-        current_playing.length.unwrap() as i32,
-        current_playing.image.unwrap(),
-        crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
-        vec![
-          spotify_history_alt::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
-          spotify_history_alt::artists::set(artists),
-          spotify_history_alt::listened_at::set(date),
-        ]
-      ).exec().await.ok();
-  } else {
-    prisma.spotify_history().create(
-        current_playing.id.unwrap(),
-        current_playing.name.unwrap(),
-        current_playing.length.unwrap() as i32,
-        current_playing.image.unwrap(),
-        crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
-        vec![
-          spotify_history::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
-          spotify_history::artists::set(artists),
-          spotify_history::listened_at::set(date),
-        ]
-      ).exec().await.ok();
-  };
+
+  let mut params = vec![
+    spotify_history::r#type::set(
+      current_playing
+        .current_playing_type
+        .as_ref()
+        .unwrap()
+        .to_string(),
+    ),
+    spotify_history::artists::set(artists),
+    spotify_history::listened_at::set(date),
+  ];
+
+  if let Some(_) = current_playing.alt {
+    params.push(spotify_history::alt::set(current_playing.alt));
+  }
+
+  prisma.spotify_history().create(
+    current_playing.id.unwrap(),
+    current_playing.name.unwrap(),
+    current_playing.length.unwrap() as i32,
+    current_playing.image.unwrap(),
+    crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
+    params
+  ).exec().await.ok();
 }

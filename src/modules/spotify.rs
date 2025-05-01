@@ -26,6 +26,7 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
 
   let prisma = &mut &data.prisma;
 
+  let mut alt = Some(false);
   let player_state =
     if let Ok(main_player) = get_player_state(valkey, None).await {
       if main_player.is_playing {
@@ -33,6 +34,7 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
       } else {
         if let Ok(player) = get_player_state(valkey, Some(true)).await {
           if player.is_playing {
+            alt = Some(true);
             Some(player)
           } else {
             Some(main_player)
@@ -79,6 +81,7 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
             .device_type
             .unwrap_or_else(|| String::from("unknown")),
         }),
+        alt,
       };
 
       let current_query = helpers::get_playing(valkey).await;
@@ -115,12 +118,12 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
                 (date.timestamp() * 1000) - latest.length as i64;
 
               if date_minus_length >= listened_date {
-                store_history(prisma, current_playing, None).await;
+                store_history(prisma, current_playing).await;
               }
             }
-            None => store_history(prisma, current_playing, None).await,
+            None => store_history(prisma, current_playing).await,
           },
-          Err(_) => store_history(prisma, current_playing, None).await,
+          Err(_) => store_history(prisma, current_playing).await,
         }
       }
     } else {

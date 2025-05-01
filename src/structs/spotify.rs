@@ -129,6 +129,7 @@ pub struct CurrentPlaying {
   pub progress: Option<i64>,
   pub image: Option<String>,
   pub device: Option<DeviceRewrite>,
+  pub alt: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]

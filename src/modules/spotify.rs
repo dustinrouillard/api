@@ -27,18 +27,18 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
   let prisma = &mut &data.prisma;
 
   let player_state =
-    if let Ok(player) = get_player_state(valkey, None).await {
-      if player.is_playing {
-        Some(player)
+    if let Ok(main_player) = get_player_state(valkey, None).await {
+      if main_player.is_playing {
+        Some(main_player)
       } else {
         if let Ok(player) = get_player_state(valkey, Some(true)).await {
           if player.is_playing {
             Some(player)
           } else {
-            Some(player)
+            Some(main_player)
           }
         } else {
-          Some(player)
+          Some(main_player)
         }
       }
     } else {

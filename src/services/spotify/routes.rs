@@ -9,13 +9,16 @@ use crate::{
   config::Config,
   connectivity::prisma::spotify_history,
   services::spotify::helpers,
-  structs::spotify::{AuthorizationData, RecentSongQuery, SpotifyTokens},
+  structs::spotify::{
+    AuthorizationData, RecentSongQuery, SpotifyQueryString, SpotifyTokens,
+  },
   ServerState,
 };
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AuthorizeQuery {
   code: String,
+  alt: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,12 +79,21 @@ async fn recent_listens(
 #[get("/authorize")]
 async fn authorize(
   data: web::Data<ServerState>,
+  query: web::Query<SpotifyQueryString>,
 ) -> Result<HttpResponse, Error> {
   let valkey = &mut data.valkey.clone();
 
+  let mut redirect_extra = "";
+  let mut base_key = "spotify";
+  let alt = query.alt.unwrap_or(false);
+  if alt {
+    base_key = "spotify_alt";
+    redirect_extra = "?alt=true";
+  }
+
   let setup_check = valkey
     .cm
-    .exists("spotify/refresh_token")
+    .exists(format!("{}/refresh_token", base_key))
     .await
     .unwrap_or(false);
   if setup_check {
@@ -97,7 +109,8 @@ async fn authorize(
   let config = Config::init_from_env().unwrap();
 
   let scope = "user-read-playback-state+user-read-currently-playing";
-  let redirect_uri = "http://127.0.0.1:8080/spotify/setup";
+  let redirect_uri =
+    format!("{}{}", config.spotify_redirect_uri, redirect_extra);
   let url = format!("https://accounts.spotify.com/authorize?client_id={}&response_type=code&scope={}&redirect_uri={}", config.spotify_client_id, scope, redirect_uri);
   let json = json!({ "url": url });
 
@@ -111,9 +124,17 @@ async fn setup(
 ) -> Result<HttpResponse, Box<dyn std::error::Error>> {
   let valkey = &mut data.valkey.clone();
 
+  let mut redirect_extra = "";
+  let mut base_key = "spotify";
+  let alt = info.alt.unwrap_or(false);
+  if alt {
+    base_key = "spotify_alt";
+    redirect_extra = "?alt=true";
+  }
+
   let setup_check = valkey
     .cm
-    .exists("spotify/refresh_token")
+    .exists(format!("{}/refresh_token", base_key))
     .await
     .unwrap_or(false);
   if setup_check {
@@ -129,7 +150,8 @@ async fn setup(
   let config = Config::init_from_env().unwrap();
 
   let code = &info.code;
-  let redirect_uri = "http://127.0.0.1:8080/spotify/setup";
+  let redirect_uri =
+    format!("{}{}", config.spotify_redirect_uri, redirect_extra);
   let data = AuthorizationData {
     code: code.clone().into(),
     grant_type: "authorization_code".into(),
@@ -158,7 +180,7 @@ async fn setup(
     let body = res.json::<SpotifyTokens>().await.unwrap();
 
     redis::cmd("SET")
-      .arg("spotify/access_token")
+      .arg(format!("{}/access_token", base_key))
       .arg(&body.access_token)
       .arg("EX")
       .arg(&body.expires_in)
@@ -170,7 +192,7 @@ async fn setup(
     match refresh_token {
       Some(refresh_token) => {
         redis::cmd("SET")
-          .arg("spotify/refresh_token")
+          .arg(format!("{}/refresh_token", base_key))
           .arg(refresh_token)
           .query_async::<ConnectionManager, String>(&mut valkey.cm)
           .await

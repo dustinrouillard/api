@@ -3,17 +3,20 @@ use std::{io::Error, sync::Arc};
 use chrono::{DateTime, FixedOffset, Utc};
 use envconfig::Envconfig;
 use redis::{aio::ConnectionManager, AsyncCommands};
+use reqwest::Client;
 use serde_json::json;
 
 use crate::{
   config::Config,
   connectivity::{
-    prisma::{spotify_devices, spotify_history, PrismaClient},
+    prisma::{
+      spotify_devices, spotify_history, spotify_history_alt, PrismaClient,
+    },
     valkey::ValkeyManager,
   },
   structs::spotify::{
-    AuthorizationData, CurrentPlaying, SpotifyAccount, SpotifyArtist,
-    SpotifyTokens,
+    AuthorizationData, CurrentPlaying, PlayerState, SpotifyAccount,
+    SpotifyArtist, SpotifyTokens,
   },
 };
 
@@ -48,12 +51,47 @@ pub async fn update_current(
     .unwrap();
 }
 
+pub async fn get_player_state(
+  valkey: &mut ValkeyManager,
+  alt: Option<bool>,
+) -> Result<PlayerState, Error> {
+  let account = get_spotify_account(valkey, alt).await?;
+  let client = Client::new();
+
+  let res = client
+    .get("https://api.spotify.com/v1/me/player?additional_types=episode")
+    .header("Authorization", format!("Bearer {}", account.access_token))
+    .send()
+    .await
+    .unwrap();
+
+  if res.status() != 200 {
+    return Err(Error::new(
+      std::io::ErrorKind::InvalidInput,
+      "spotify player state not found",
+    ));
+  }
+
+  let json = res.json::<PlayerState>().await.unwrap();
+
+  Ok(json)
+}
+
 pub async fn get_spotify_account(
   valkey: &mut ValkeyManager,
+  alt: Option<bool>,
 ) -> Result<SpotifyAccount, Error> {
-  let access_token = valkey.cm.get("spotify/access_token").await;
-  let refresh_token =
-    valkey.cm.get("spotify/refresh_token").await.unwrap();
+  let mut key_base = "spotify";
+  if alt.is_some() {
+    key_base = "spotify_alt";
+  }
+  let access_token =
+    valkey.cm.get(format!("{}/access_token", key_base)).await;
+  let refresh_token = valkey
+    .cm
+    .get(format!("{}/refresh_token", key_base))
+    .await
+    .unwrap();
 
   if refresh_token == None {
     return Err(Error::new(
@@ -72,7 +110,12 @@ pub async fn get_spotify_account(
     Err(..) => {
       let config = Config::init_from_env().unwrap();
 
-      let redirect_uri = "http://127.0.0.1:8080/v2/spotify/setup";
+      let mut extra = "";
+      if alt.is_some() {
+        extra = "?alt=true";
+      }
+      let redirect_uri =
+        format!("{}{}", config.spotify_redirect_uri, extra);
       let data = AuthorizationData {
         refresh_token: refresh_token.unwrap().into(),
         grant_type: "refresh_token".into(),
@@ -97,7 +140,6 @@ pub async fn get_spotify_account(
         .unwrap();
 
       let status = res.status();
-
       if status.as_u16() == 200 {
         let body = res.json::<SpotifyTokens>().await.unwrap();
 
@@ -106,6 +148,7 @@ pub async fn get_spotify_account(
           &body.access_token,
           &body.refresh_token,
           &body.expires_in,
+          alt,
         )
         .await;
 
@@ -129,24 +172,29 @@ pub async fn save_spotify_tokens(
   access_token: &String,
   refresh_token: &Option<String>,
   expiry_ttl: &u32,
+  alt: Option<bool>,
 ) {
+  let mut key_base = "spotify";
+  if alt.is_some_and(|b| b) {
+    key_base = "spotify_alt";
+  }
   redis::cmd("SET")
-    .arg("spotify/access_token")
+    .arg(format!("{}/access_token", key_base))
     .arg(access_token)
     .arg("EX")
     .arg(expiry_ttl)
     .query_async::<ConnectionManager, String>(&mut valkey.cm)
     .await
-    .unwrap();
+    .ok();
 
   match refresh_token {
     Some(refresh_token) => {
       redis::cmd("SET")
-        .arg("spotify/refresh_token")
+        .arg(format!("{}/refresh_token", key_base))
         .arg(refresh_token)
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await
-        .unwrap();
+        .ok();
     }
     None => (),
   }
@@ -191,6 +239,7 @@ pub async fn get_or_make_device(
 pub async fn store_history(
   prisma: &mut &PrismaClient,
   current_playing: Arc<CurrentPlaying>,
+  alt: Option<bool>,
 ) {
   let date: DateTime<FixedOffset> =
     Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap());
@@ -215,16 +264,31 @@ pub async fn store_history(
   }
 
   let current_playing = current_playing.as_ref().clone();
-  let _ = prisma.spotify_history().create(
-      current_playing.id.unwrap(),
-      current_playing.name.unwrap(),
-      current_playing.length.unwrap() as i32,
-      current_playing.image.unwrap(),
-      crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
-      vec![
-        spotify_history::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
-        spotify_history::artists::set(artists),
-        spotify_history::listened_at::set(date),
-      ]
-    ).exec().await;
+  if alt.is_some_and(|b| b) {
+    prisma.spotify_history_alt().create(
+        current_playing.id.unwrap(),
+        current_playing.name.unwrap(),
+        current_playing.length.unwrap() as i32,
+        current_playing.image.unwrap(),
+        crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
+        vec![
+          spotify_history_alt::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
+          spotify_history_alt::artists::set(artists),
+          spotify_history_alt::listened_at::set(date),
+        ]
+      ).exec().await.ok();
+  } else {
+    prisma.spotify_history().create(
+        current_playing.id.unwrap(),
+        current_playing.name.unwrap(),
+        current_playing.length.unwrap() as i32,
+        current_playing.image.unwrap(),
+        crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
+        vec![
+          spotify_history::r#type::set(current_playing.current_playing_type.as_ref().unwrap().to_string()),
+          spotify_history::artists::set(artists),
+          spotify_history::listened_at::set(date),
+        ]
+      ).exec().await.ok();
+  };
 }

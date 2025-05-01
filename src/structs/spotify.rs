@@ -7,6 +7,11 @@ pub struct RecentSongQuery {
   pub limit: Option<i64>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct SpotifyQueryString {
+  pub alt: Option<bool>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerState {
   pub device: Device,

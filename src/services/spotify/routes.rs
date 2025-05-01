@@ -68,7 +68,8 @@ async fn recent_listens(
         "length": recent.length,
         "image": recent.image,
         "device": recent.spotify_devices,
-        "listened_at": recent.listened_at
+        "listened_at": recent.listened_at,
+        "alt": recent.alt,
       })
     })
     .collect();

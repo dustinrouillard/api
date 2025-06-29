@@ -3,7 +3,7 @@ use actix_web_lab::middleware::from_fn;
 
 use crate::services;
 
-pub fn uploads_factory() -> Scope<
+pub fn factory() -> Scope<
   impl ServiceFactory<
     actix_web::dev::ServiceRequest,
     Config = (),

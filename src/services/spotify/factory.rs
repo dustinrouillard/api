@@ -2,7 +2,7 @@ use actix_web::{web, Scope};
 
 use crate::services;
 
-pub fn spotify_factory() -> Scope {
+pub fn factory() -> Scope {
   web::scope("/spotify")
     .service(services::spotify::routes::recent_listens)
     .service(services::spotify::routes::current)

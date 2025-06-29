@@ -3,7 +3,7 @@ use actix_web_lab::middleware::from_fn;
 
 use crate::services;
 
-pub fn analytics_factory() -> Scope {
+pub fn factory() -> Scope {
   web::scope("/analytics")
     .service(services::analytics::routes::get_analytics)
     .service(

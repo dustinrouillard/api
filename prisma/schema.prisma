@@ -68,3 +68,13 @@ model blog_assets {
   @@index([post_id])
   @@index([upload_date])
 }
+
+model photography_albums {
+  slug        String   @id(map: "photography_albums_pkey1")
+  name        String
+  location    String?
+  description String?
+  cover       String
+  items       Json
+  date        DateTime @default(now()) @db.Timestamp(6)
+}

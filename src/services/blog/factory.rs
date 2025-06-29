@@ -3,7 +3,7 @@ use actix_web_lab::middleware::from_fn;
 
 use crate::services;
 
-pub fn blog_factory() -> Scope {
+pub fn factory() -> Scope {
   web::scope("/blog")
     .service(services::blog::auth::login)
     .service(services::blog::posts::get_post)

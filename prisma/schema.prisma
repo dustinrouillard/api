@@ -74,7 +74,7 @@ model photography_albums {
   name        String
   location    String?
   description String?
-  cover       String
-  items       Json
+  cover       String?
+  items       Json     @default("[]")
   date        DateTime @default(now()) @db.Timestamp(6)
 }

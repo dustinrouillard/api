@@ -8,7 +8,7 @@ pub fn factory() -> Scope {
     .service(services::analytics::routes::get_analytics)
     .service(
       web::scope("")
-        .wrap(from_fn(services::uploads::middleware::uploads_auth_mw))
+        .wrap(from_fn(services::middleware::auth_middleware))
         .service(services::analytics::routes::track_command),
     )
 }

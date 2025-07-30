@@ -99,7 +99,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
       })
       .allowed_origin_fn(|origin, _req_head| {
         origin.as_bytes().ends_with(b":3000")
-      });
+      })
+      .allow_any_method()
+      .allow_any_header()
+      .supports_credentials();
 
     App::new()
       .app_data(web::Data::clone(&data_http))
@@ -127,7 +130,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
           .service(services::blog::factory::factory())
           .service(services::instagram::factory())
           .service(services::photography::factory())
-          .service(services::settings::factory()),
+          .service(services::settings::factory())
+          .service(services::management::factory()),
       )
   })
   .bind(((config.listen_host).to_owned(), config.listen_port))?

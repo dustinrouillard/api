@@ -462,6 +462,7 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "openssl",
+ "optional-field",
  "prisma-client-rust",
  "prisma-client-rust-cli",
  "prometheus",
@@ -3234,6 +3235,27 @@ dependencies = [
  "rand 0.8.5",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "optional-field"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c14aa46a4fb656e28d26a1b3c10212c15793b59f34fb90b36f60fa5036f381b2"
+dependencies = [
+ "optional-fields-serde-macro",
+ "serde",
+]
+
+[[package]]
+name = "optional-fields-serde-macro"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ce6f60944270655c0b7a6afc51afd40a111c85e55ea855ecb00c3392865dd45"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]

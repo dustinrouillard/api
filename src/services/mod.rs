@@ -4,6 +4,8 @@ pub mod blog;
 pub mod github;
 pub mod hooks;
 pub mod instagram;
+pub mod management;
+pub mod middleware;
 pub mod photography;
 pub mod riderr;
 pub mod settings;

@@ -1,3 +1,5 @@
+pub mod routes;
+
 use actix_web::{body::MessageBody, dev::ServiceFactory, web, Scope};
 use actix_web_lab::middleware::from_fn;
 
@@ -12,7 +14,7 @@ pub fn factory() -> Scope<
     InitError = (),
   >,
 > {
-  web::scope("/uploads")
+  web::scope("/management")
     .wrap(from_fn(services::middleware::auth_middleware))
-    .service(services::uploads::routes::upload_to_cdn)
+    .service(routes::check_token)
 }

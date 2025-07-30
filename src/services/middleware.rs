@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::ServerState;
 
-pub async fn uploads_auth_mw(
+pub async fn auth_middleware(
   req: ServiceRequest,
   next: Next<impl MessageBody + 'static>,
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
@@ -34,7 +34,7 @@ pub async fn uploads_auth_mw(
     }
     Some(token) => {
       let valkey_session = redis::cmd("GET")
-        .arg(format!("upload_tokens/{}", token.to_str().unwrap()))
+        .arg(format!("mgmt_token/{}", token.to_str().unwrap()))
         .query_async::<ConnectionManager, String>(&mut valkey.cm)
         .await;
 

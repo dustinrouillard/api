@@ -1,3 +1,4 @@
+use optional_field::{serde_optional_fields, Field};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -14,13 +15,45 @@ pub struct GetAlbumResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct CreateAlbumPayload {
+  pub name: String,
+  pub slug: String,
+  pub cover: Option<String>,
+  pub location: Option<String>,
+  pub description: Option<String>,
+}
+
+#[serde_optional_fields]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EditAlbumPayload {
+  pub name: Option<String>,
+  pub cover: Field<String>,
+  pub location: Field<String>,
+  pub description: Field<String>,
+}
+
+#[serde_optional_fields]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EditPhotoPayload {
+  pub caption: Field<String>,
+  pub instagram: Field<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PublicAlbum {
   pub slug: String,
   pub name: String,
-  pub cover: String,
+  pub cover: Option<String>,
   pub description: Option<String>,
   pub location: Option<String>,
   pub items: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AlbumItem {
+  pub name: String,
+  pub caption: Option<String>,
+  pub instagram: Option<String>,
 }
 
 impl From<Data> for PublicAlbum {

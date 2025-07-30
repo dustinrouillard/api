@@ -36,6 +36,16 @@ async fn get_albums(
       return ErrorInternalServerError(error.to_string());
     })?;
 
+  let albums = albums
+    .into_iter()
+    .filter(|album| {
+      serde_json::from_value::<Vec<AlbumItem>>(album.items.clone())
+        .unwrap()
+        .len()
+        > 0
+    })
+    .collect::<Vec<_>>();
+
   Ok(HttpResponse::Ok().json(GetAlbumsResponse::from(albums)))
 }
 

@@ -1,7 +1,8 @@
 use actix_multipart::form::MultipartForm;
 use actix_web::{
-  delete, error::ErrorInternalServerError, get, patch, post, put, web,
-  Error, HttpResponse,
+  delete, error::ErrorInternalServerError, get,
+  http::header::AUTHORIZATION, patch, post, put, web, Error, HttpRequest,
+  HttpResponse,
 };
 use optional_field::Field;
 use prisma_client_rust::Direction;
@@ -9,6 +10,7 @@ use serde_json::json;
 
 use crate::{
   connectivity::prisma::photography_albums::{self, OrderByParam},
+  helpers::authentication::is_management_authed,
   services::uploads::helpers,
   structs::{
     photography::{
@@ -23,6 +25,7 @@ use crate::{
 #[get("/albums")]
 async fn get_albums(
   state: web::Data<ServerState>,
+  req: HttpRequest,
 ) -> Result<HttpResponse, Error> {
   let albums = state
     .prisma
@@ -36,13 +39,25 @@ async fn get_albums(
       return ErrorInternalServerError(error.to_string());
     })?;
 
+  let valkey = &mut state.valkey.clone();
+  let is_management_authed =
+    is_management_authed(valkey, req.headers().get(AUTHORIZATION))
+      .await
+      .ok();
+
+  tracing::info!("is_management_authed: {:?}", is_management_authed);
+
   let albums = albums
     .into_iter()
     .filter(|album| {
-      serde_json::from_value::<Vec<AlbumItem>>(album.items.clone())
-        .unwrap()
-        .len()
-        > 0
+      if let Some(true) = is_management_authed {
+        true
+      } else {
+        serde_json::from_value::<Vec<AlbumItem>>(album.items.clone())
+          .unwrap()
+          .len()
+          > 0
+      }
     })
     .collect::<Vec<_>>();
 

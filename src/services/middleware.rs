@@ -6,10 +6,9 @@ use actix_web::{
   Error, HttpResponse,
 };
 use actix_web_lab::middleware::Next;
-use redis::aio::ConnectionManager;
 use serde_json::json;
 
-use crate::ServerState;
+use crate::{helpers::authentication::is_management_authed, ServerState};
 
 pub async fn auth_middleware(
   req: ServiceRequest,
@@ -33,13 +32,11 @@ pub async fn auth_middleware(
       );
     }
     Some(token) => {
-      let valkey_session = redis::cmd("GET")
-        .arg(format!("mgmt_token/{}", token.to_str().unwrap()))
-        .query_async::<ConnectionManager, String>(&mut valkey.cm)
-        .await;
+      let is_management_authed =
+        is_management_authed(valkey, Some(token)).await;
 
-      match valkey_session {
-        Err(_) => {
+      if let Ok(authed) = is_management_authed {
+        if !authed {
           return Ok(
             ServiceResponse::new(
               req.request().to_owned(),
@@ -49,14 +46,21 @@ pub async fn auth_middleware(
             .map_into_boxed_body(),
           );
         }
-
-        Ok(_) => {
-          return next
-            .call(req)
-            .await
-            .map(ServiceResponse::map_into_boxed_body);
-        }
+      } else {
+        return Ok(
+          ServiceResponse::new(
+            req.request().to_owned(),
+            HttpResponse::Unauthorized()
+              .json(json!({"code": "invalid_authentication"})),
+          )
+          .map_into_boxed_body(),
+        );
       }
+
+      return next
+        .call(req)
+        .await
+        .map(ServiceResponse::map_into_boxed_body);
     }
   }
 }

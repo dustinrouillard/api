@@ -45,8 +45,6 @@ async fn get_albums(
       .await
       .ok();
 
-  tracing::info!("is_management_authed: {:?}", is_management_authed);
-
   let albums = albums
     .into_iter()
     .filter(|album| {
@@ -196,7 +194,7 @@ async fn edit_album(
       return ErrorInternalServerError(error.to_string());
     })?;
 
-  Ok(HttpResponse::Created().json(GetAlbumResponse::from(album)))
+  Ok(HttpResponse::Ok().json(GetAlbumResponse::from(album)))
 }
 
 #[delete("/albums/{slug}")]

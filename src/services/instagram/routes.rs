@@ -32,7 +32,7 @@ pub async fn get_overview(
     if res.is_err() {
       eprintln!("failed to fetch instagram graph {:?}", res.unwrap_err());
       return Ok(
-        HttpResponse::Ok()
+        HttpResponse::InternalServerError()
           .json(json!({ "error": "failed_to_fetch_ig_graph" })),
       );
     }
@@ -44,7 +44,7 @@ pub async fn get_overview(
         instagram_me.unwrap_err()
       );
       return Ok(
-        HttpResponse::Ok()
+        HttpResponse::InternalServerError()
           .json(json!({ "error": "failed_to_fetch_ig_graph" })),
       );
     }
@@ -65,7 +65,7 @@ pub async fn get_overview(
     Ok(HttpResponse::Ok().json(overview))
   } else {
     Ok(
-      HttpResponse::Ok()
+      HttpResponse::InternalServerError()
         .json(json!({ "error": "failed_to_fetch_ig_graph" })),
     )
   }

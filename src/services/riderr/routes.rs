@@ -29,7 +29,13 @@ async fn ride_stats(
     .await
     .unwrap();
 
-  let json = res.json::<RiderrUserStats>().await.unwrap();
+  let json = res.json::<RiderrUserStats>().await;
+
+  if json.is_err() {
+    return Ok(HttpResponse::InternalServerError().json(json!({"error": "Failed to fetch stats"})));
+  }
+
+  let json = json.unwrap();
 
   Ok(HttpResponse::Ok().json(json!({"riderr": {
     "riding": in_ride,

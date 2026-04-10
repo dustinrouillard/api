@@ -12,7 +12,10 @@ pub async fn send_riderr_event(rabbit: &mut RabbitManager) {
   let client = reqwest::Client::new();
   let res = client
     .get(format!("{}/v1/users/stats", config.riderr_api_endpoint))
-    .header("Authorization", config.riderr_api_token)
+    .header(
+      "Authorization",
+      format!("ApiKey {}", config.riderr_api_token),
+    )
     .send()
     .await
     .unwrap();

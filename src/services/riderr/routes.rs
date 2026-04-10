@@ -24,14 +24,20 @@ async fn ride_stats(
   let client = reqwest::Client::new();
   let res = client
     .get(format!("{}/v1/users/stats", config.riderr_api_endpoint))
-    .header("Authorization", config.riderr_api_token)
+    .header(
+      "Authorization",
+      format!("ApiKey {}", config.riderr_api_token),
+    )
     .send()
     .await
     .unwrap();
 
   let json = res.json::<RiderrUserStats>().await;
   if json.is_err() {
-    return Ok(HttpResponse::InternalServerError().json(json!({"error": "Failed to fetch stats"})));
+    return Ok(
+      HttpResponse::InternalServerError()
+        .json(json!({"error": "Failed to fetch stats"})),
+    );
   }
 
   let json = json.unwrap();

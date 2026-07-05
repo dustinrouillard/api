@@ -37,6 +37,7 @@ pub struct EditAlbumPayload {
 pub struct EditPhotoPayload {
   pub caption: Field<String>,
   pub instagram: Field<String>,
+  pub frame: Field<Frame>,
 }
 
 /// Fields that can be applied across many photos at once. Each uses the
@@ -48,6 +49,8 @@ pub struct BulkPhotoFields {
   pub caption: Field<String>,
   #[serde(default)]
   pub instagram: Field<String>,
+  #[serde(default)]
+  pub frame: Field<Frame>,
 }
 
 /// A single targeted photo update inside a bulk request.
@@ -58,6 +61,8 @@ pub struct BulkPhotoItem {
   pub caption: Field<String>,
   #[serde(default)]
   pub instagram: Field<String>,
+  #[serde(default)]
+  pub frame: Field<Frame>,
 }
 
 /// Bulk update payload. `apply_to_all` is applied first to every photo in the
@@ -104,11 +109,24 @@ pub struct PublicAlbum {
   pub items: Value,
 }
 
+/// Focal point for a photo, as `object-position` percentages (0–100).
+/// `None`/absent means centered (50/50). Applies wherever the photo is
+/// rendered, including the album cover slot when this photo is the cover.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Frame {
+  pub x: f64,
+  pub y: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AlbumItem {
   pub name: String,
   pub caption: Option<String>,
   pub instagram: Option<String>,
+  // Optional: absent on older records, so it stays `Option` (serde defaults
+  // missing `Option` fields to `None`). Serialized as `null` when centered.
+  #[serde(default)]
+  pub frame: Option<Frame>,
 }
 
 impl From<Data> for PublicAlbum {

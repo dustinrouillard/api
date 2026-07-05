@@ -364,6 +364,7 @@ async fn upload_photos(
           name: file_name.clone(),
           caption: None,
           instagram: None,
+          frame: None,
         });
         uploaded.push(file_name);
       }
@@ -453,6 +454,11 @@ async fn update_photo(
     Field::Present(None) => photo.instagram = None,
     Field::Present(instagram) => photo.instagram = instagram.clone(),
   }
+  match &payload.frame {
+    Field::Missing => (),
+    Field::Present(None) => photo.frame = None,
+    Field::Present(frame) => photo.frame = frame.clone(),
+  }
 
   let album = state
     .prisma
@@ -531,6 +537,11 @@ async fn bulk_update_photos(
         Field::Present(None) => item.instagram = None,
         Field::Present(instagram) => item.instagram = instagram.clone(),
       }
+      match &all.frame {
+        Field::Missing => (),
+        Field::Present(None) => item.frame = None,
+        Field::Present(frame) => item.frame = frame.clone(),
+      }
     }
   }
 
@@ -549,6 +560,11 @@ async fn bulk_update_photos(
           Field::Missing => (),
           Field::Present(None) => item.instagram = None,
           Field::Present(instagram) => item.instagram = instagram.clone(),
+        }
+        match &update.frame {
+          Field::Missing => (),
+          Field::Present(None) => item.frame = None,
+          Field::Present(frame) => item.frame = frame.clone(),
         }
       }
     }

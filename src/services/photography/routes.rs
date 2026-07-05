@@ -14,13 +14,16 @@ use crate::{
   services::uploads::helpers,
   structs::{
     photography::{
-      AlbumItem, CreateAlbumPayload, EditAlbumPayload, EditPhotoPayload,
-      GetAlbumResponse, GetAlbumsResponse,
+      AlbumItem, BulkUpdatePhotosPayload, CreateAlbumPayload,
+      EditAlbumPayload, EditPhotoPayload, GetAlbumResponse,
+      GetAlbumsResponse, PublicAlbum, ReorderPhotosPayload, SkippedUpload,
+      UploadPhotosResponse,
     },
     uploads::CdnUpload,
   },
   ServerState,
 };
+use std::collections::HashMap;
 
 #[get("/albums")]
 async fn get_albums(
@@ -91,10 +94,18 @@ async fn create_album(
   state: web::Data<ServerState>,
   payload: web::Json<CreateAlbumPayload>,
 ) -> Result<HttpResponse, Error> {
+  let mut params: Vec<photography_albums::SetParam> = Vec::new();
+  if let Some(location) = payload.location.clone() {
+    params.push(photography_albums::location::set(Some(location)));
+  }
+  if let Some(description) = payload.description.clone() {
+    params.push(photography_albums::description::set(Some(description)));
+  }
+
   let album = state
     .prisma
     .photography_albums()
-    .create(payload.slug.clone(), payload.name.clone(), vec![])
+    .create(payload.slug.clone(), payload.name.clone(), params)
     .exec()
     .await
     .map_err(|error| {
@@ -265,11 +276,13 @@ async fn delete_album(
 }
 
 #[put("/albums/{slug}")]
-async fn upload_photo(
+async fn upload_photos(
   MultipartForm(form): MultipartForm<CdnUpload>,
   state: web::Data<ServerState>,
   slug: web::Path<String>,
 ) -> Result<HttpResponse, Error> {
+  let slug = slug.into_inner();
+
   let album = state
     .prisma
     .photography_albums()
@@ -287,80 +300,108 @@ async fn upload_photo(
     );
   }
 
-  let file = &mut form.files.first().unwrap();
-  let file_type =
-    match helpers::is_allowed_type(file, "images".to_string()) {
-      (true, res) => res,
-      (false, _) => {
-        return Ok(
-          HttpResponse::BadRequest()
-            .json(json!({"code": "prohibited_file_type"})),
-        );
-      }
-    };
+  let album = album.unwrap();
 
-  if file.file_name.is_none() {
+  if form.files.is_empty() {
     return Ok(
-      HttpResponse::BadRequest()
-        .json(json!({"code": "missing_file_name"})),
+      HttpResponse::BadRequest().json(json!({"code": "no_files"})),
     );
   }
 
-  let file_name = file.file_name.clone().unwrap();
-
   let mut items: Vec<AlbumItem> =
-    serde_json::from_value(album.unwrap().items).map_err(|error| {
+    serde_json::from_value(album.items.clone()).map_err(|error| {
       eprintln!("failed to parse album items {:?}", error);
       return ErrorInternalServerError(error.to_string());
     })?;
 
-  let photo = items.iter_mut().find(|item| item.name == file_name);
-  if photo.is_some() {
-    return Ok(
-      HttpResponse::NotFound()
-        .json(json!({"code": "photo_already_exists"})),
-    );
-  }
-
-  let path = format!("gallery/albums/{}/{}", slug.clone(), file_name);
-
   let s3 = &state.s3;
-  let response = s3
-    .cdn_bucket
-    .put_object_with_content_type(&path, &file.data, &file_type.mime)
-    .await
-    .unwrap();
+  let mut uploaded: Vec<String> = Vec::new();
+  let mut skipped: Vec<SkippedUpload> = Vec::new();
 
-  if response.status_code() != 200 {
-    return Ok(
-      HttpResponse::BadRequest()
-        .json(json!({"code": "failed_upload_to_s3"})),
-    );
+  for file in form.files.iter() {
+    let file_type =
+      match helpers::is_allowed_type(file, "images".to_string()) {
+        (true, res) => res,
+        (false, _) => {
+          skipped.push(SkippedUpload {
+            name: file.file_name.clone(),
+            reason: "prohibited_file_type".to_string(),
+          });
+          continue;
+        }
+      };
+
+    let file_name = match &file.file_name {
+      Some(name) => name.clone(),
+      None => {
+        skipped.push(SkippedUpload {
+          name: None,
+          reason: "missing_file_name".to_string(),
+        });
+        continue;
+      }
+    };
+
+    // Guard against clashing with a photo that already exists, or with
+    // another file of the same name earlier in this same request.
+    if items.iter().any(|item| item.name == file_name) {
+      skipped.push(SkippedUpload {
+        name: Some(file_name),
+        reason: "photo_already_exists".to_string(),
+      });
+      continue;
+    }
+
+    let path = format!("gallery/albums/{}/{}", slug.clone(), file_name);
+    let response = s3
+      .cdn_bucket
+      .put_object_with_content_type(&path, &file.data, &file_type.mime)
+      .await;
+
+    match response {
+      Ok(response) if response.status_code() == 200 => {
+        items.push(AlbumItem {
+          name: file_name.clone(),
+          caption: None,
+          instagram: None,
+        });
+        uploaded.push(file_name);
+      }
+      _ => {
+        skipped.push(SkippedUpload {
+          name: Some(file_name),
+          reason: "failed_upload_to_s3".to_string(),
+        });
+      }
+    }
   }
 
-  items.push(AlbumItem {
-    name: file_name,
-    caption: None,
-    instagram: None,
-  });
+  // Only touch the database if at least one file actually landed.
+  let album = if uploaded.is_empty() {
+    album
+  } else {
+    state
+      .prisma
+      .photography_albums()
+      .update(
+        photography_albums::slug::equals(slug),
+        vec![photography_albums::items::set(
+          serde_json::to_value(&items).unwrap(),
+        )],
+      )
+      .exec()
+      .await
+      .map_err(|error| {
+        eprintln!("failed to update album in database {:?}", error);
+        return ErrorInternalServerError(error.to_string());
+      })?
+  };
 
-  state
-    .prisma
-    .photography_albums()
-    .update(
-      photography_albums::slug::equals(slug.into_inner()),
-      vec![photography_albums::items::set(
-        serde_json::to_value(items).unwrap(),
-      )],
-    )
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to update album in database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
-
-  Ok(HttpResponse::NoContent().finish())
+  Ok(HttpResponse::Ok().json(UploadPhotosResponse {
+    album: PublicAlbum::from(album),
+    uploaded,
+    skipped,
+  }))
 }
 
 #[patch("/albums/{slug}/photos/{name}")]
@@ -420,6 +461,181 @@ async fn update_photo(
       photography_albums::slug::equals(slug),
       vec![photography_albums::items::set(
         serde_json::to_value(items).unwrap(),
+      )],
+    )
+    .exec()
+    .await
+    .map_err(|error| {
+      eprintln!("failed to update album in database {:?}", error);
+      return ErrorInternalServerError(error.to_string());
+    })?;
+
+  Ok(HttpResponse::Ok().json(GetAlbumResponse::from(album)))
+}
+
+#[patch("/albums/{slug}/photos")]
+async fn bulk_update_photos(
+  state: web::Data<ServerState>,
+  slug: web::Path<String>,
+  payload: web::Json<BulkUpdatePhotosPayload>,
+) -> Result<HttpResponse, Error> {
+  let album = state
+    .prisma
+    .photography_albums()
+    .find_unique(photography_albums::slug::equals(slug.clone()))
+    .exec()
+    .await
+    .map_err(|error| {
+      eprintln!("failed to get album from database {:?}", error);
+      return ErrorInternalServerError(error.to_string());
+    })?;
+
+  if album.is_none() {
+    return Ok(
+      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+    );
+  }
+
+  let mut items: Vec<AlbumItem> =
+    serde_json::from_value(album.unwrap().items).map_err(|error| {
+      eprintln!("failed to get album items {:?}", error);
+      return ErrorInternalServerError(error.to_string());
+    })?;
+
+  // Validate every targeted photo exists before mutating anything, so the
+  // request is all-or-nothing.
+  if let Some(photos) = &payload.photos {
+    let missing: Vec<String> = photos
+      .iter()
+      .filter(|update| !items.iter().any(|item| item.name == update.name))
+      .map(|update| update.name.clone())
+      .collect();
+
+    if !missing.is_empty() {
+      return Ok(HttpResponse::NotFound().json(
+        json!({"code": "photos_not_found", "photos": missing}),
+      ));
+    }
+  }
+
+  // First, blanket changes across every photo in the album.
+  if let Some(all) = &payload.apply_to_all {
+    for item in items.iter_mut() {
+      match &all.caption {
+        Field::Missing => (),
+        Field::Present(None) => item.caption = None,
+        Field::Present(caption) => item.caption = caption.clone(),
+      }
+      match &all.instagram {
+        Field::Missing => (),
+        Field::Present(None) => item.instagram = None,
+        Field::Present(instagram) => item.instagram = instagram.clone(),
+      }
+    }
+  }
+
+  // Then per-photo overrides on top.
+  if let Some(photos) = &payload.photos {
+    for update in photos {
+      if let Some(item) =
+        items.iter_mut().find(|item| item.name == update.name)
+      {
+        match &update.caption {
+          Field::Missing => (),
+          Field::Present(None) => item.caption = None,
+          Field::Present(caption) => item.caption = caption.clone(),
+        }
+        match &update.instagram {
+          Field::Missing => (),
+          Field::Present(None) => item.instagram = None,
+          Field::Present(instagram) => item.instagram = instagram.clone(),
+        }
+      }
+    }
+  }
+
+  let album = state
+    .prisma
+    .photography_albums()
+    .update(
+      photography_albums::slug::equals(slug.into_inner()),
+      vec![photography_albums::items::set(
+        serde_json::to_value(items).unwrap(),
+      )],
+    )
+    .exec()
+    .await
+    .map_err(|error| {
+      eprintln!("failed to update album in database {:?}", error);
+      return ErrorInternalServerError(error.to_string());
+    })?;
+
+  Ok(HttpResponse::Ok().json(GetAlbumResponse::from(album)))
+}
+
+#[put("/albums/{slug}/order")]
+async fn reorder_photos(
+  state: web::Data<ServerState>,
+  slug: web::Path<String>,
+  payload: web::Json<ReorderPhotosPayload>,
+) -> Result<HttpResponse, Error> {
+  let album = state
+    .prisma
+    .photography_albums()
+    .find_unique(photography_albums::slug::equals(slug.clone()))
+    .exec()
+    .await
+    .map_err(|error| {
+      eprintln!("failed to get album from database {:?}", error);
+      return ErrorInternalServerError(error.to_string());
+    })?;
+
+  if album.is_none() {
+    return Ok(
+      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+    );
+  }
+
+  let items: Vec<AlbumItem> =
+    serde_json::from_value(album.unwrap().items).map_err(|error| {
+      eprintln!("failed to get album items {:?}", error);
+      return ErrorInternalServerError(error.to_string());
+    })?;
+
+  // The new order must be an exact permutation of the existing photos:
+  // no duplicates, and the same set of names (which also enforces equal
+  // length). Build a lookup we can drain from so each name is consumed once.
+  let mut lookup: HashMap<String, AlbumItem> =
+    items.into_iter().map(|item| (item.name.clone(), item)).collect();
+
+  let mut reordered: Vec<AlbumItem> = Vec::with_capacity(lookup.len());
+  for name in &payload.order {
+    match lookup.remove(name) {
+      Some(item) => reordered.push(item),
+      None => {
+        // Either an unknown photo, or a duplicate that was already drained.
+        return Ok(HttpResponse::BadRequest().json(
+          json!({"code": "invalid_order", "photo": name}),
+        ));
+      }
+    }
+  }
+
+  // Anything left in the lookup means the caller omitted a photo.
+  if !lookup.is_empty() {
+    let missing: Vec<String> = lookup.into_keys().collect();
+    return Ok(HttpResponse::BadRequest().json(
+      json!({"code": "incomplete_order", "missing": missing}),
+    ));
+  }
+
+  let album = state
+    .prisma
+    .photography_albums()
+    .update(
+      photography_albums::slug::equals(slug.into_inner()),
+      vec![photography_albums::items::set(
+        serde_json::to_value(reordered).unwrap(),
       )],
     )
     .exec()

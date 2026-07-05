@@ -15,7 +15,9 @@ pub fn factory() -> Scope {
         .service(routes::create_album)
         .service(routes::edit_album)
         .service(routes::delete_album)
-        .service(routes::upload_photo)
+        .service(routes::upload_photos)
+        .service(routes::reorder_photos)
+        .service(routes::bulk_update_photos)
         .service(routes::delete_photo)
         .service(routes::update_photo),
     )

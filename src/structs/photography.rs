@@ -39,6 +39,61 @@ pub struct EditPhotoPayload {
   pub instagram: Field<String>,
 }
 
+/// Fields that can be applied across many photos at once. Each uses the
+/// tri-state `Field` semantics: missing = leave unchanged, present-null =
+/// clear, present-value = set.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct BulkPhotoFields {
+  #[serde(default)]
+  pub caption: Field<String>,
+  #[serde(default)]
+  pub instagram: Field<String>,
+}
+
+/// A single targeted photo update inside a bulk request.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BulkPhotoItem {
+  pub name: String,
+  #[serde(default)]
+  pub caption: Field<String>,
+  #[serde(default)]
+  pub instagram: Field<String>,
+}
+
+/// Bulk update payload. `apply_to_all` is applied first to every photo in the
+/// album, then per-photo `photos` overrides are applied on top. Either or both
+/// may be provided.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct BulkUpdatePhotosPayload {
+  #[serde(default)]
+  pub apply_to_all: Option<BulkPhotoFields>,
+  #[serde(default)]
+  pub photos: Option<Vec<BulkPhotoItem>>,
+}
+
+/// Payload for reordering an album's photos. `order` must be a permutation of
+/// the album's existing photo names (same set, no duplicates, no omissions).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReorderPhotosPayload {
+  pub order: Vec<String>,
+}
+
+/// Result of a single file within a multi-photo upload that was not stored.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SkippedUpload {
+  pub name: Option<String>,
+  pub reason: String,
+}
+
+/// Response for a multi-photo upload: the updated album plus a per-file
+/// breakdown of what was stored and what was skipped.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UploadPhotosResponse {
+  pub album: PublicAlbum,
+  pub uploaded: Vec<String>,
+  pub skipped: Vec<SkippedUpload>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PublicAlbum {
   pub slug: String,

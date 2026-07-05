@@ -24,8 +24,11 @@ futures = "0.3"
 rand = "0.8.5"
 rust-argon2 = "2.1.0"
 actix-web-lab = "0.20.2"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-native-tls", "postgres", "chrono", "json", "macros"] }
-openssl = { version = "0.10.68", features = ["vendored"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "chrono", "json", "macros"] }
+# Force the transitive openssl-sys (pulled by native-tls via reqwest/rust-s3/
+# influxdb2/etc.) to build vendored from source, so the musl image never needs
+# a system OpenSSL. Not used directly in code.
+openssl-sys = { version = "0.9", features = ["vendored"] }
 rust-s3 = "0.33.0"
 actix-multipart = "0.6.1"
 infer = "0.15.0"

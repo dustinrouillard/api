@@ -2,7 +2,7 @@
 
 There is probably a lot of better ways to do many of the things I've done here, but this is one of the first things I've done in rust, make suggestions if you see anything done weirdly!
 
-Built with actix-web, makes use of prisma to handle queries to a postgresql database and uses valkey/redis for storage of tokens and caching data.
+Built with actix-web, makes use of sqlx to handle queries to a postgresql database and uses valkey/redis for storage of tokens and caching data.
 
 ## Used for
 

@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN cargo prisma generate
 RUN cargo build --release
 
 FROM alpine

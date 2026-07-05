@@ -10,8 +10,7 @@ use redis::aio::ConnectionManager;
 use serde_json::json;
 
 use crate::{
-  connectivity::prisma::blog_admin_users,
-  structs::blog::{BlogAdminIntSession, BlogAdminSession},
+  structs::blog::{BlogAdminIntSession, BlogAdminSession, BlogAdminUser},
   ServerState,
 };
 
@@ -23,7 +22,6 @@ pub async fn blog_admin_auth_mw(
 
   let state = req.app_data::<Data<ServerState>>().unwrap().clone();
 
-  let prisma = &state.prisma;
   let valkey = &mut state.valkey.clone();
 
   match auth_token {
@@ -60,40 +58,36 @@ pub async fn blog_admin_auth_mw(
             serde_json::from_str::<BlogAdminSession>(&session_token)
               .unwrap();
 
-          let user_record = prisma
-            .blog_admin_users()
-            .find_first(vec![blog_admin_users::id::equals(
-              session.user_id,
-            )])
-            .exec()
-            .await;
+          let user_record = sqlx::query_as::<_, BlogAdminUser>(
+            "SELECT * FROM blog_admin_users WHERE id = $1 LIMIT 1",
+          )
+          .bind(session.user_id)
+          .fetch_optional(&state.db)
+          .await;
 
           match user_record {
-            Ok(user) => match user {
-              Some(user) => {
-                req.extensions_mut().insert(user.clone());
-                req.extensions_mut().insert(BlogAdminIntSession {
-                  user_id: user.id.to_string(),
-                  token: token.to_str().unwrap().to_string(),
-                });
+            Ok(Some(user)) => {
+              req.extensions_mut().insert(user.clone());
+              req.extensions_mut().insert(BlogAdminIntSession {
+                user_id: user.id.to_string(),
+                token: token.to_str().unwrap().to_string(),
+              });
 
-                return next
-                  .call(req)
-                  .await
-                  .map(ServiceResponse::map_into_boxed_body);
-              }
-              None => {
-                return Ok(
-                  ServiceResponse::new(
-                    req.request().to_owned(),
-                    HttpResponse::Unauthorized().json(
-                      json!({"code": "invalid_authentication_user"}),
-                    ),
-                  )
-                  .map_into_boxed_body(),
+              return next
+                .call(req)
+                .await
+                .map(ServiceResponse::map_into_boxed_body);
+            }
+            Ok(None) => {
+              return Ok(
+                ServiceResponse::new(
+                  req.request().to_owned(),
+                  HttpResponse::Unauthorized()
+                    .json(json!({"code": "invalid_authentication_user"})),
                 )
-              }
-            },
+                .map_into_boxed_body(),
+              )
+            }
             Err(_) => {
               return Ok(
                 ServiceResponse::new(

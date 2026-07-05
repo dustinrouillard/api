@@ -1,8 +1,21 @@
+use chrono::NaiveDateTime;
 use optional_field::{serde_optional_fields, Field};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::FromRow;
 
-use crate::connectivity::prisma::photography_albums::Data;
+/// Row of the `photography_albums` table. Photos live inline in `items`.
+#[allow(dead_code)]
+#[derive(Debug, Clone, FromRow)]
+pub struct Album {
+  pub slug: String,
+  pub name: String,
+  pub location: Option<String>,
+  pub description: Option<String>,
+  pub cover: Option<String>,
+  pub items: Value,
+  pub date: NaiveDateTime,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetAlbumsResponse {
@@ -129,8 +142,8 @@ pub struct AlbumItem {
   pub frame: Option<Frame>,
 }
 
-impl From<Data> for PublicAlbum {
-  fn from(albums: Data) -> Self {
+impl From<Album> for PublicAlbum {
+  fn from(albums: Album) -> Self {
     Self {
       slug: albums.slug,
       name: albums.name,
@@ -142,8 +155,8 @@ impl From<Data> for PublicAlbum {
   }
 }
 
-impl From<Vec<Data>> for GetAlbumsResponse {
-  fn from(albums: Vec<Data>) -> Self {
+impl From<Vec<Album>> for GetAlbumsResponse {
+  fn from(albums: Vec<Album>) -> Self {
     Self {
       albums: albums
         .into_iter()
@@ -153,8 +166,8 @@ impl From<Vec<Data>> for GetAlbumsResponse {
   }
 }
 
-impl From<Data> for GetAlbumResponse {
-  fn from(album: Data) -> Self {
+impl From<Album> for GetAlbumResponse {
+  fn from(album: Album) -> Self {
     Self {
       album: PublicAlbum::from(album),
     }

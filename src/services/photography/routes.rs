@@ -5,16 +5,14 @@ use actix_web::{
   HttpResponse,
 };
 use optional_field::Field;
-use prisma_client_rust::Direction;
 use serde_json::json;
 
 use crate::{
-  connectivity::prisma::photography_albums::{self, OrderByParam},
   helpers::authentication::is_management_authed,
   services::uploads::helpers,
   structs::{
     photography::{
-      AlbumItem, BulkUpdatePhotosPayload, CreateAlbumPayload,
+      Album, AlbumItem, BulkUpdatePhotosPayload, CreateAlbumPayload,
       EditAlbumPayload, EditPhotoPayload, GetAlbumResponse,
       GetAlbumsResponse, PublicAlbum, ReorderPhotosPayload, SkippedUpload,
       UploadPhotosResponse,
@@ -25,22 +23,33 @@ use crate::{
 };
 use std::collections::HashMap;
 
+/// Fetch a single album by its slug.
+async fn find_album(
+  db: &sqlx::PgPool,
+  slug: &str,
+) -> Result<Option<Album>, sqlx::Error> {
+  sqlx::query_as::<_, Album>(
+    "SELECT * FROM photography_albums WHERE slug = $1 LIMIT 1",
+  )
+  .bind(slug)
+  .fetch_optional(db)
+  .await
+}
+
 #[get("/albums")]
 async fn get_albums(
   state: web::Data<ServerState>,
   req: HttpRequest,
 ) -> Result<HttpResponse, Error> {
-  let albums = state
-    .prisma
-    .photography_albums()
-    .find_many(vec![])
-    .order_by(OrderByParam::Date(Direction::Asc))
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to fetch albums from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let albums = sqlx::query_as::<_, Album>(
+    "SELECT * FROM photography_albums ORDER BY date ASC",
+  )
+  .fetch_all(&state.db)
+  .await
+  .map_err(|error| {
+    eprintln!("failed to fetch albums from database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })?;
 
   let valkey = &mut state.valkey.clone();
   let is_management_authed =
@@ -70,16 +79,11 @@ async fn get_album(
   state: web::Data<ServerState>,
   slug: web::Path<String>,
 ) -> Result<HttpResponse, Error> {
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_first(vec![photography_albums::slug::equals(slug.into_inner())])
-    .order_by(OrderByParam::Date(Direction::Asc))
-    .exec()
+  let album = find_album(&state.db, &slug.into_inner())
     .await
     .map_err(|error| {
       eprintln!("failed to fetch albums from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
+      ErrorInternalServerError(error.to_string())
     })?;
 
   if album.is_none() {
@@ -94,24 +98,20 @@ async fn create_album(
   state: web::Data<ServerState>,
   payload: web::Json<CreateAlbumPayload>,
 ) -> Result<HttpResponse, Error> {
-  let mut params: Vec<photography_albums::SetParam> = Vec::new();
-  if let Some(location) = payload.location.clone() {
-    params.push(photography_albums::location::set(Some(location)));
-  }
-  if let Some(description) = payload.description.clone() {
-    params.push(photography_albums::description::set(Some(description)));
-  }
-
-  let album = state
-    .prisma
-    .photography_albums()
-    .create(payload.slug.clone(), payload.name.clone(), params)
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to create album in database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let album = sqlx::query_as::<_, Album>(
+    "INSERT INTO photography_albums (slug, name, location, description) \
+     VALUES ($1, $2, $3, $4) RETURNING *",
+  )
+  .bind(payload.slug.clone())
+  .bind(payload.name.clone())
+  .bind(payload.location.clone())
+  .bind(payload.description.clone())
+  .fetch_one(&state.db)
+  .await
+  .map_err(|error| {
+    eprintln!("failed to create album in database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })?;
 
   Ok(HttpResponse::Created().json(GetAlbumResponse::from(album)))
 }
@@ -122,88 +122,70 @@ async fn edit_album(
   slug: web::Path<String>,
   payload: web::Json<EditAlbumPayload>,
 ) -> Result<HttpResponse, Error> {
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_unique(photography_albums::slug::equals(slug.clone()))
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to get album from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let slug = slug.into_inner();
 
-  if album.is_none() {
-    return Ok(
-      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
-    );
-  }
-
-  let mut params: Vec<Option<photography_albums::SetParam>> =
-    vec![payload.name.clone().map(photography_albums::name::set)];
-
-  match &payload.description {
-    Field::Missing => {}
-    Field::Present(None) => {
-      params.push(Some(photography_albums::description::set(None)))
+  let album = match find_album(&state.db, &slug).await.map_err(|error| {
+    eprintln!("failed to get album from database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })? {
+    Some(album) => album,
+    None => {
+      return Ok(
+        HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+      );
     }
-    Field::Present(description) => {
-      params.push(Some(photography_albums::description::set(
-        description.to_owned(),
-      )));
-    }
-  }
+  };
 
-  match &payload.location {
-    Field::Missing => {}
-    Field::Present(None) => {
-      params.push(Some(photography_albums::location::set(None)))
-    }
-    Field::Present(location) => {
-      params.push(Some(photography_albums::location::set(
-        location.to_owned(),
-      )));
-    }
-  }
-
-  let items: Vec<AlbumItem> = serde_json::from_value(album.unwrap().items)
+  let items: Vec<AlbumItem> = serde_json::from_value(album.items.clone())
     .map_err(|error| {
       eprintln!("failed to get album items {:?}", error);
-      return ErrorInternalServerError(error.to_string());
+      ErrorInternalServerError(error.to_string())
     })?;
 
-  match &payload.cover {
-    Field::Missing => {}
-    Field::Present(None) => {
-      params.push(Some(photography_albums::cover::set(None)))
-    }
+  // Resolve each column to its final value (tri-state fields can clear to
+  // NULL; missing fields keep the current value).
+  let name = payload.name.clone().unwrap_or(album.name);
+  let description = match &payload.description {
+    Field::Missing => album.description,
+    Field::Present(None) => None,
+    Field::Present(description) => description.to_owned(),
+  };
+  let location = match &payload.location {
+    Field::Missing => album.location,
+    Field::Present(None) => None,
+    Field::Present(location) => location.to_owned(),
+  };
+  let cover = match &payload.cover {
+    Field::Missing => album.cover,
+    Field::Present(None) => None,
     Field::Present(cover) => {
-      let name = cover.to_owned().unwrap();
-      let photo = items.iter().find(|item| item.name == name);
-      if photo.is_none() {
+      let cover_name = cover.to_owned().unwrap();
+      if !items.iter().any(|item| item.name == cover_name) {
         return Ok(
           HttpResponse::NotFound()
             .json(json!({"code": "cover_photo_not_found"})),
         );
       }
-
-      params.push(Some(photography_albums::cover::set(Some(name))));
+      Some(cover_name)
     }
-  }
+  };
 
-  let params: Vec<photography_albums::SetParam> =
-    params.into_iter().flatten().collect();
-
-  let album = state
-    .prisma
-    .photography_albums()
-    .update(photography_albums::slug::equals(slug.into_inner()), params)
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to create album in database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let album = sqlx::query_as::<_, Album>(
+    "UPDATE photography_albums \
+     SET name = $1, description = $2, location = $3, cover = $4 \
+     WHERE slug = $5 RETURNING *",
+  )
+  .bind(name)
+  .bind(description)
+  .bind(location)
+  .bind(cover)
+  .bind(&slug)
+  .fetch_one(&state.db)
+  .await
+  .map_err(|error| {
+    eprintln!("failed to update album in database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })?;
 
   Ok(HttpResponse::Ok().json(GetAlbumResponse::from(album)))
 }
@@ -213,24 +195,20 @@ async fn delete_album(
   state: web::Data<ServerState>,
   slug: web::Path<String>,
 ) -> Result<HttpResponse, Error> {
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_unique(photography_albums::slug::equals(slug.clone()))
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to get album from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let slug = slug.into_inner();
 
-  if album.is_none() {
-    return Ok(
-      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
-    );
-  }
+  let album = match find_album(&state.db, &slug).await.map_err(|error| {
+    eprintln!("failed to get album from database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })? {
+    Some(album) => album,
+    None => {
+      return Ok(
+        HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+      );
+    }
+  };
 
-  let album = album.unwrap();
   let items: Vec<AlbumItem> = serde_json::from_value(album.items)
     .map_err(|error| ErrorInternalServerError(error.to_string()))?;
 
@@ -261,15 +239,13 @@ async fn delete_album(
     }
   }
 
-  state
-    .prisma
-    .photography_albums()
-    .delete(photography_albums::slug::equals(slug.into_inner()))
-    .exec()
+  sqlx::query("DELETE FROM photography_albums WHERE slug = $1")
+    .bind(&slug)
+    .execute(&state.db)
     .await
     .map_err(|error| {
       eprintln!("failed to delete album in database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
+      ErrorInternalServerError(error.to_string())
     })?;
 
   Ok(HttpResponse::NoContent().finish())
@@ -283,24 +259,17 @@ async fn upload_photos(
 ) -> Result<HttpResponse, Error> {
   let slug = slug.into_inner();
 
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_unique(photography_albums::slug::equals(slug.clone()))
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to get album from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
-
-  if album.is_none() {
-    return Ok(
-      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
-    );
-  }
-
-  let album = album.unwrap();
+  let album = match find_album(&state.db, &slug).await.map_err(|error| {
+    eprintln!("failed to get album from database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })? {
+    Some(album) => album,
+    None => {
+      return Ok(
+        HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+      );
+    }
+  };
 
   if form.files.is_empty() {
     return Ok(
@@ -311,7 +280,7 @@ async fn upload_photos(
   let mut items: Vec<AlbumItem> =
     serde_json::from_value(album.items.clone()).map_err(|error| {
       eprintln!("failed to parse album items {:?}", error);
-      return ErrorInternalServerError(error.to_string());
+      ErrorInternalServerError(error.to_string())
     })?;
 
   let s3 = &state.s3;
@@ -381,21 +350,18 @@ async fn upload_photos(
   let album = if uploaded.is_empty() {
     album
   } else {
-    state
-      .prisma
-      .photography_albums()
-      .update(
-        photography_albums::slug::equals(slug),
-        vec![photography_albums::items::set(
-          serde_json::to_value(&items).unwrap(),
-        )],
-      )
-      .exec()
-      .await
-      .map_err(|error| {
-        eprintln!("failed to update album in database {:?}", error);
-        return ErrorInternalServerError(error.to_string());
-      })?
+    sqlx::query_as::<_, Album>(
+      "UPDATE photography_albums SET items = $1 WHERE slug = $2 \
+       RETURNING *",
+    )
+    .bind(serde_json::to_value(&items).unwrap())
+    .bind(&slug)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|error| {
+      eprintln!("failed to update album in database {:?}", error);
+      ErrorInternalServerError(error.to_string())
+    })?
   };
 
   Ok(HttpResponse::Ok().json(UploadPhotosResponse {
@@ -413,27 +379,22 @@ async fn update_photo(
 ) -> Result<HttpResponse, Error> {
   let (slug, name) = path.into_inner();
 
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_unique(photography_albums::slug::equals(slug.clone()))
-    .exec()
-    .await
+  let album = match find_album(&state.db, &slug).await.map_err(|error| {
+    eprintln!("failed to get album from database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })? {
+    Some(album) => album,
+    None => {
+      return Ok(
+        HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+      );
+    }
+  };
+
+  let mut items: Vec<AlbumItem> = serde_json::from_value(album.items)
     .map_err(|error| {
-      eprintln!("failed to get album from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
-
-  if album.is_none() {
-    return Ok(
-      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
-    );
-  }
-
-  let mut items: Vec<AlbumItem> =
-    serde_json::from_value(album.unwrap().items).map_err(|error| {
       eprintln!("failed to get album items {:?}", error);
-      return ErrorInternalServerError(error.to_string());
+      ErrorInternalServerError(error.to_string())
     })?;
 
   let photo = items.iter_mut().find(|item| item.name == name);
@@ -460,21 +421,17 @@ async fn update_photo(
     Field::Present(frame) => photo.frame = frame.clone(),
   }
 
-  let album = state
-    .prisma
-    .photography_albums()
-    .update(
-      photography_albums::slug::equals(slug),
-      vec![photography_albums::items::set(
-        serde_json::to_value(items).unwrap(),
-      )],
-    )
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to update album in database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let album = sqlx::query_as::<_, Album>(
+    "UPDATE photography_albums SET items = $1 WHERE slug = $2 RETURNING *",
+  )
+  .bind(serde_json::to_value(items).unwrap())
+  .bind(&slug)
+  .fetch_one(&state.db)
+  .await
+  .map_err(|error| {
+    eprintln!("failed to update album in database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })?;
 
   Ok(HttpResponse::Ok().json(GetAlbumResponse::from(album)))
 }
@@ -485,27 +442,24 @@ async fn bulk_update_photos(
   slug: web::Path<String>,
   payload: web::Json<BulkUpdatePhotosPayload>,
 ) -> Result<HttpResponse, Error> {
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_unique(photography_albums::slug::equals(slug.clone()))
-    .exec()
-    .await
+  let slug = slug.into_inner();
+
+  let album = match find_album(&state.db, &slug).await.map_err(|error| {
+    eprintln!("failed to get album from database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })? {
+    Some(album) => album,
+    None => {
+      return Ok(
+        HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+      );
+    }
+  };
+
+  let mut items: Vec<AlbumItem> = serde_json::from_value(album.items)
     .map_err(|error| {
-      eprintln!("failed to get album from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
-
-  if album.is_none() {
-    return Ok(
-      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
-    );
-  }
-
-  let mut items: Vec<AlbumItem> =
-    serde_json::from_value(album.unwrap().items).map_err(|error| {
       eprintln!("failed to get album items {:?}", error);
-      return ErrorInternalServerError(error.to_string());
+      ErrorInternalServerError(error.to_string())
     })?;
 
   // Validate every targeted photo exists before mutating anything, so the
@@ -570,21 +524,17 @@ async fn bulk_update_photos(
     }
   }
 
-  let album = state
-    .prisma
-    .photography_albums()
-    .update(
-      photography_albums::slug::equals(slug.into_inner()),
-      vec![photography_albums::items::set(
-        serde_json::to_value(items).unwrap(),
-      )],
-    )
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to update album in database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let album = sqlx::query_as::<_, Album>(
+    "UPDATE photography_albums SET items = $1 WHERE slug = $2 RETURNING *",
+  )
+  .bind(serde_json::to_value(items).unwrap())
+  .bind(&slug)
+  .fetch_one(&state.db)
+  .await
+  .map_err(|error| {
+    eprintln!("failed to update album in database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })?;
 
   Ok(HttpResponse::Ok().json(GetAlbumResponse::from(album)))
 }
@@ -595,27 +545,24 @@ async fn reorder_photos(
   slug: web::Path<String>,
   payload: web::Json<ReorderPhotosPayload>,
 ) -> Result<HttpResponse, Error> {
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_unique(photography_albums::slug::equals(slug.clone()))
-    .exec()
-    .await
+  let slug = slug.into_inner();
+
+  let album = match find_album(&state.db, &slug).await.map_err(|error| {
+    eprintln!("failed to get album from database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })? {
+    Some(album) => album,
+    None => {
+      return Ok(
+        HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+      );
+    }
+  };
+
+  let items: Vec<AlbumItem> = serde_json::from_value(album.items)
     .map_err(|error| {
-      eprintln!("failed to get album from database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
-
-  if album.is_none() {
-    return Ok(
-      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
-    );
-  }
-
-  let items: Vec<AlbumItem> =
-    serde_json::from_value(album.unwrap().items).map_err(|error| {
       eprintln!("failed to get album items {:?}", error);
-      return ErrorInternalServerError(error.to_string());
+      ErrorInternalServerError(error.to_string())
     })?;
 
   // The new order must be an exact permutation of the existing photos:
@@ -645,21 +592,17 @@ async fn reorder_photos(
     ));
   }
 
-  let album = state
-    .prisma
-    .photography_albums()
-    .update(
-      photography_albums::slug::equals(slug.into_inner()),
-      vec![photography_albums::items::set(
-        serde_json::to_value(reordered).unwrap(),
-      )],
-    )
-    .exec()
-    .await
-    .map_err(|error| {
-      eprintln!("failed to update album in database {:?}", error);
-      return ErrorInternalServerError(error.to_string());
-    })?;
+  let album = sqlx::query_as::<_, Album>(
+    "UPDATE photography_albums SET items = $1 WHERE slug = $2 RETURNING *",
+  )
+  .bind(serde_json::to_value(reordered).unwrap())
+  .bind(&slug)
+  .fetch_one(&state.db)
+  .await
+  .map_err(|error| {
+    eprintln!("failed to update album in database {:?}", error);
+    ErrorInternalServerError(error.to_string())
+  })?;
 
   Ok(HttpResponse::Ok().json(GetAlbumResponse::from(album)))
 }
@@ -671,24 +614,21 @@ async fn delete_photo(
 ) -> Result<HttpResponse, Error> {
   let (slug, name) = path.into_inner();
 
-  let album = state
-    .prisma
-    .photography_albums()
-    .find_unique(photography_albums::slug::equals(slug.clone()))
-    .exec()
+  let album = match find_album(&state.db, &slug)
     .await
-    .map_err(|error| ErrorInternalServerError(error.to_string()))?;
+    .map_err(|error| ErrorInternalServerError(error.to_string()))?
+  {
+    Some(album) => album,
+    None => {
+      return Ok(
+        HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
+      );
+    }
+  };
 
-  if album.is_none() {
-    return Ok(
-      HttpResponse::NotFound().json(json!({"code": "album_not_found"})),
-    );
-  }
-
-  let album = album.unwrap();
-
-  let mut items: Vec<AlbumItem> = serde_json::from_value(album.items)
-    .map_err(|error| ErrorInternalServerError(error.to_string()))?;
+  let mut items: Vec<AlbumItem> =
+    serde_json::from_value(album.items.clone())
+      .map_err(|error| ErrorInternalServerError(error.to_string()))?;
 
   let photo_index = items.iter().position(|item| item.name == name);
   if photo_index.is_none() {
@@ -699,14 +639,12 @@ async fn delete_photo(
 
   let photo = items.remove(photo_index.unwrap());
 
-  let mut params: Vec<photography_albums::SetParam> =
-    vec![photography_albums::items::set(
-      serde_json::to_value(&items).unwrap(),
-    )];
-
-  if Some(photo.name.clone()) == album.cover {
-    params.push(photography_albums::cover::set(None));
-  }
+  // Clear the cover if we just deleted the photo it referenced.
+  let cover = if album.cover.as_deref() == Some(photo.name.as_str()) {
+    None
+  } else {
+    album.cover
+  };
 
   let path = format!("gallery/albums/{}/{}", slug.clone(), name);
   let s3 = &state.s3;
@@ -718,13 +656,15 @@ async fn delete_photo(
     );
   }
 
-  state
-    .prisma
-    .photography_albums()
-    .update(photography_albums::slug::equals(slug), params)
-    .exec()
-    .await
-    .map_err(|error| ErrorInternalServerError(error.to_string()))?;
+  sqlx::query(
+    "UPDATE photography_albums SET items = $1, cover = $2 WHERE slug = $3",
+  )
+  .bind(serde_json::to_value(&items).unwrap())
+  .bind(cover)
+  .bind(&slug)
+  .execute(&state.db)
+  .await
+  .map_err(|error| ErrorInternalServerError(error.to_string()))?;
 
   Ok(HttpResponse::NoContent().finish())
 }

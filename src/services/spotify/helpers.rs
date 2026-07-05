@@ -1,20 +1,18 @@
 use std::{io::Error, sync::Arc};
 
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, Utc};
 use envconfig::Envconfig;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use reqwest::Client;
 use serde_json::json;
+use sqlx::PgPool;
 
 use crate::{
   config::Config,
-  connectivity::{
-    prisma::{spotify_devices, spotify_history, PrismaClient},
-    valkey::ValkeyManager,
-  },
+  connectivity::valkey::ValkeyManager,
   structs::spotify::{
     AuthorizationData, CurrentPlaying, PlayerState, SpotifyAccount,
-    SpotifyArtist, SpotifyTokens,
+    SpotifyArtist, SpotifyDevice, SpotifyTokens,
   },
 };
 
@@ -199,50 +197,39 @@ pub async fn save_spotify_tokens(
 }
 
 pub async fn get_or_make_device(
-  prisma: &mut &PrismaClient,
+  db: &PgPool,
   name: String,
   device_type: String,
-) -> spotify_devices::Data {
+) -> SpotifyDevice {
   let name = Some(name);
-  match prisma
-    .spotify_devices()
-    .find_first(vec![spotify_devices::name::equals(name.clone())])
-    .exec()
-    .await
+  match sqlx::query_as::<_, SpotifyDevice>(
+    "SELECT * FROM spotify_devices WHERE name = $1 LIMIT 1",
+  )
+  .bind(name.clone())
+  .fetch_optional(db)
+  .await
   {
-    Ok(device) => match device {
-      Some(device) => device,
-      None => prisma
-        .spotify_devices()
-        .create(vec![
-          spotify_devices::name::set(name),
-          spotify_devices::r#type::set(Some(device_type)),
-        ])
-        .exec()
-        .await
-        .unwrap(),
-    },
-    Err(_) => prisma
-      .spotify_devices()
-      .create(vec![
-        spotify_devices::name::set(name),
-        spotify_devices::r#type::set(Some(device_type)),
-      ])
-      .exec()
-      .await
-      .unwrap(),
+    Ok(Some(device)) => device,
+    _ => sqlx::query_as::<_, SpotifyDevice>(
+      "INSERT INTO spotify_devices (name, type) VALUES ($1, $2) \
+       RETURNING *",
+    )
+    .bind(name)
+    .bind(Some(device_type))
+    .fetch_one(db)
+    .await
+    .unwrap(),
   }
 }
 
 pub async fn store_history(
-  prisma: &mut &PrismaClient,
+  db: &PgPool,
   current_playing: Arc<CurrentPlaying>,
 ) {
-  let date: DateTime<FixedOffset> =
-    Utc::now().with_timezone(&FixedOffset::east_opt(0).unwrap());
+  let date: DateTime<Utc> = Utc::now();
 
   let dev = get_or_make_device(
-    prisma,
+    db,
     current_playing.device.as_ref().unwrap().name.to_string(),
     current_playing
       .device
@@ -253,7 +240,7 @@ pub async fn store_history(
   )
   .await;
 
-  let mut artists = Vec::new();
+  let mut artists: Vec<serde_json::Value> = Vec::new();
   for artist in current_playing.artists.as_ref().unwrap() {
     artists.push(json!(SpotifyArtist {
       name: artist.name.clone(),
@@ -262,28 +249,28 @@ pub async fn store_history(
 
   let current_playing = current_playing.as_ref().clone();
 
-  let mut params = vec![
-    spotify_history::r#type::set(
-      current_playing
-        .current_playing_type
-        .as_ref()
-        .unwrap()
-        .to_string(),
-    ),
-    spotify_history::artists::set(artists),
-    spotify_history::listened_at::set(date),
-  ];
+  let type_str = current_playing
+    .current_playing_type
+    .as_ref()
+    .unwrap()
+    .to_string();
 
-  if let Some(_) = current_playing.alt {
-    params.push(spotify_history::alt::set(current_playing.alt));
-  }
-
-  prisma.spotify_history().create(
-    current_playing.id.unwrap(),
-    current_playing.name.unwrap(),
-    current_playing.length.unwrap() as i32,
-    current_playing.image.unwrap(),
-    crate::connectivity::prisma::spotify_devices::UniqueWhereParam::IdEquals(dev.id),
-    params
-  ).exec().await.ok();
+  // `alt` falls back to the column default (false) when not provided.
+  sqlx::query(
+    "INSERT INTO spotify_history \
+       (id, type, name, length, image, device, artists, listened_at, alt) \
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))",
+  )
+  .bind(current_playing.id.unwrap())
+  .bind(type_str)
+  .bind(current_playing.name.unwrap())
+  .bind(current_playing.length.unwrap() as i32)
+  .bind(current_playing.image.unwrap())
+  .bind(dev.id)
+  .bind(artists)
+  .bind(date)
+  .bind(current_playing.alt)
+  .execute(db)
+  .await
+  .ok();
 }

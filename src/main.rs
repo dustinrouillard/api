@@ -16,20 +16,20 @@ use connectivity::{
 };
 use envconfig::Envconfig;
 use futures::future;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
 use tokio::time;
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{
   fmt, prelude::__tracing_subscriber_SubscriberExt, EnvFilter, Registry,
 };
 
-use connectivity::prisma::PrismaClient;
-
 use crate::config::Config;
 
 pub struct ServerState {
   pub valkey: ValkeyManager,
   pub rabbit: RabbitManager,
-  pub prisma: PrismaClient,
+  pub db: PgPool,
   pub s3: S3Manager,
   pub prometheus: PrometheusClient,
   pub influxdb: InfluxManager,
@@ -57,7 +57,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
   let influxdb = connectivity::influxdb::InfluxManager::new().await;
 
-  let prisma = PrismaClient::_builder().build().await.unwrap();
+  let db = PgPoolOptions::new()
+    .max_connections(10)
+    .connect(&config.postgres_dsn)
+    .await
+    .expect("failed to connect to postgres");
 
   if config.env == "dev" {
     tracing::info!("Running in DEV mode");
@@ -66,7 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
   let data = web::Data::new(ServerState {
     valkey,
     rabbit,
-    prisma,
+    db,
     s3,
     prometheus,
     influxdb,

@@ -1,15 +1,9 @@
 use actix_multipart::form::MultipartForm;
 use actix_web::{delete, get, http::Error, post, web, HttpResponse};
-use prisma_client_rust::{
-  prisma_errors::query_engine::UniqueKeyViolation, Direction,
-};
 use serde_json::json;
 use sha1::{Digest, Sha1};
 
-use crate::{
-  connectivity::prisma::blog_assets, structs::blog::BlogAssetUpload,
-  ServerState,
-};
+use crate::{structs::blog::{BlogAsset, BlogAssetUpload}, ServerState};
 
 #[post("/posts/{id}/assets")]
 async fn upload_asset_for_post(
@@ -18,7 +12,6 @@ async fn upload_asset_for_post(
   post_id: web::Path<String>,
 ) -> Result<HttpResponse, Error> {
   let s3 = &state.s3;
-  let prisma = &state.prisma;
 
   let file = &mut form.files.first().unwrap();
 
@@ -51,36 +44,29 @@ async fn upload_asset_for_post(
 
   let size = file.data.len() as i32;
 
-  let asset = prisma
-    .blog_assets()
-    .create(
-      hash.clone(),
-      ext.clone(),
-      crate::connectivity::prisma::blog_posts::UniqueWhereParam::IdEquals(
-        post_id.to_string(),
-      ),
-      vec![blog_assets::file_size::set(size)],
-    )
-    .exec()
-    .await;
+  let asset = sqlx::query_as::<_, BlogAsset>(
+    "INSERT INTO blog_assets (hash, post_id, file_type, file_size) \
+     VALUES ($1, $2, $3, $4) RETURNING *",
+  )
+  .bind(hash.clone())
+  .bind(post_id.to_string())
+  .bind(ext.clone())
+  .bind(size)
+  .fetch_one(&state.db)
+  .await;
 
   match asset {
-    Err(error) if error.is_prisma_error::<UniqueKeyViolation>() => Ok(
-        HttpResponse::BadRequest()
+    Err(sqlx::Error::Database(error)) if error.is_unique_violation() => Ok(
+      HttpResponse::BadRequest()
         .json(json!({"code": "asset_already_exists"})),
     ),
-    Err(_) => {
-      Ok(
-        HttpResponse::BadRequest()
-          .json(json!({"code": "failed_to_create_asset"})),
-      )
-    },
-    Ok(asset) => Ok(
-        HttpResponse::Ok()
-          .json(
-            json!({"asset": { "hash": hash, "post_id": post_id.to_string(), "file_type": ext, "file_size": size, "upload_date": asset.upload_date }}),
-          ),
-      ),
+    Err(_) => Ok(
+      HttpResponse::BadRequest()
+        .json(json!({"code": "failed_to_create_asset"})),
+    ),
+    Ok(asset) => Ok(HttpResponse::Ok().json(
+      json!({"asset": { "hash": hash, "post_id": post_id.to_string(), "file_type": ext, "file_size": size, "upload_date": asset.upload_date }}),
+    )),
   }
 }
 
@@ -89,15 +75,13 @@ async fn get_assets_for_post(
   post_id: web::Path<String>,
   state: web::Data<ServerState>,
 ) -> Result<HttpResponse, Error> {
-  let prisma = &mut &state.prisma;
-
-  let assets: Vec<blog_assets::Data> = prisma
-    .blog_assets()
-    .find_many(vec![blog_assets::post_id::equals(post_id.to_string())])
-    .order_by(blog_assets::upload_date::order(Direction::Asc))
-    .exec()
-    .await
-    .unwrap();
+  let assets: Vec<BlogAsset> = sqlx::query_as::<_, BlogAsset>(
+    "SELECT * FROM blog_assets WHERE post_id = $1 ORDER BY upload_date ASC",
+  )
+  .bind(post_id.to_string())
+  .fetch_all(&state.db)
+  .await
+  .unwrap();
 
   let assets: Vec<serde_json::Value> = assets
     .iter()
@@ -123,46 +107,41 @@ async fn delete_asset_for_post(
   let post_id = params.first().unwrap();
   let hash = params.last().unwrap();
 
-  let prisma = &mut &state.prisma;
   let s3 = &state.s3;
 
-  let asset = prisma
-    .blog_assets()
-    .find_first(vec![
-      blog_assets::hash::equals(hash.to_string()),
-      blog_assets::post_id::equals(post_id.to_string()),
-    ])
-    .exec()
-    .await;
+  let asset = sqlx::query_as::<_, BlogAsset>(
+    "SELECT * FROM blog_assets WHERE hash = $1 AND post_id = $2 LIMIT 1",
+  )
+  .bind(hash.to_string())
+  .bind(post_id.to_string())
+  .fetch_optional(&state.db)
+  .await;
 
   match asset {
-    Ok(asset) => match asset {
-      Some(asset) => {
-        let file_type = asset.file_type;
+    Ok(Some(asset)) => {
+      let file_type = asset.file_type;
 
-        let res = s3
-          .cdn_bucket
-          .delete_object(format!("blog/assets/{hash}.{file_type}"))
-          .await;
+      let res = s3
+        .cdn_bucket
+        .delete_object(format!("blog/assets/{hash}.{file_type}"))
+        .await;
 
-        if res.unwrap().status_code() != 204 {
-          return Ok(HttpResponse::BadRequest().json(json!({
-            "code": "failed_to_delete_from_s3"
-          })));
-        }
-
-        let _ = prisma
-          .blog_assets()
-          .delete(blog_assets::hash::equals(hash.to_string()))
-          .exec()
-          .await;
-
-        Ok(HttpResponse::NoContent().finish())
+      if res.unwrap().status_code() != 204 {
+        return Ok(HttpResponse::BadRequest().json(json!({
+          "code": "failed_to_delete_from_s3"
+        })));
       }
-      None => Ok(HttpResponse::NotFound().json(json!({
-        "code": "asset_not_found"
-      }))),
-    },
+
+      let _ = sqlx::query("DELETE FROM blog_assets WHERE hash = $1")
+        .bind(hash.to_string())
+        .execute(&state.db)
+        .await;
+
+      Ok(HttpResponse::NoContent().finish())
+    }
+    Ok(None) => Ok(HttpResponse::NotFound().json(json!({
+      "code": "asset_not_found"
+    }))),
     Err(_) => Ok(HttpResponse::BadRequest().json(json!({
       "code": "error_with_asset_lookup"
     }))),

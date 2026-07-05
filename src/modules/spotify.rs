@@ -2,14 +2,12 @@ use std::sync::Arc;
 
 use actix_web::web::{self};
 use chrono::prelude::*;
-use prisma_client_rust::Direction;
 
 use crate::{
-  connectivity::prisma::spotify_history,
   services::spotify::helpers::{self, get_player_state, store_history},
   structs::{
     self,
-    spotify::{ArtistName, CurrentPlaying, DeviceRewrite},
+    spotify::{ArtistName, CurrentPlaying, DeviceRewrite, SpotifyHistory},
   },
   ServerState,
 };
@@ -23,8 +21,6 @@ fn get_name(
 pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
   let valkey = &mut data.valkey.clone();
   let rabbit = &mut data.rabbit.clone();
-
-  let prisma = &mut &data.prisma;
 
   let mut alt = Some(false);
   let player_state =
@@ -102,28 +98,25 @@ pub(crate) async fn fetch_spotify_current(data: web::Data<ServerState>) {
           return;
         }
 
-        match prisma
-          .spotify_history()
-          .find_first(vec![spotify_history::id::equals(
-            current_playing.id.as_ref().unwrap().to_string(),
-          )])
-          .order_by(spotify_history::listened_at::order(Direction::Desc))
-          .exec()
-          .await
+        match sqlx::query_as::<_, SpotifyHistory>(
+          "SELECT * FROM spotify_history WHERE id = $1 \
+           ORDER BY listened_at DESC LIMIT 1",
+        )
+        .bind(current_playing.id.as_ref().unwrap().to_string())
+        .fetch_optional(&data.db)
+        .await
         {
-          Ok(latest) => match latest {
-            Some(latest) => {
-              let listened_date = latest.listened_at.timestamp() * 1000;
-              let date_minus_length =
-                (date.timestamp() * 1000) - latest.length as i64;
+          Ok(Some(latest)) => {
+            let listened_date = latest.listened_at.timestamp() * 1000;
+            let date_minus_length =
+              (date.timestamp() * 1000) - latest.length as i64;
 
-              if date_minus_length >= listened_date {
-                store_history(prisma, current_playing).await;
-              }
+            if date_minus_length >= listened_date {
+              store_history(&data.db, current_playing).await;
             }
-            None => store_history(prisma, current_playing).await,
-          },
-          Err(_) => store_history(prisma, current_playing).await,
+          }
+          Ok(None) => store_history(&data.db, current_playing).await,
+          Err(_) => store_history(&data.db, current_playing).await,
         }
       }
     } else {

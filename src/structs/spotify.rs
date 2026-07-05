@@ -1,10 +1,36 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use sqlx::FromRow;
 extern crate serde_json;
 
 #[derive(Deserialize, Debug)]
 pub struct RecentSongQuery {
   pub limit: Option<i64>,
+}
+
+/// Row of the `spotify_devices` table.
+#[allow(dead_code)]
+#[derive(Debug, Clone, FromRow)]
+pub struct SpotifyDevice {
+  pub id: i32,
+  pub name: Option<String>,
+  pub r#type: Option<String>,
+}
+
+/// Row of the `spotify_history` table. `artists` is a `jsonb[]` column.
+#[allow(dead_code)]
+#[derive(Debug, Clone, FromRow)]
+pub struct SpotifyHistory {
+  pub id: String,
+  pub r#type: String,
+  pub name: String,
+  pub artists: Vec<serde_json::Value>,
+  pub length: i32,
+  pub image: String,
+  pub device: i32,
+  pub listened_at: DateTime<Utc>,
+  pub alt: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]

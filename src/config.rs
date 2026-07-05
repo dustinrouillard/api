@@ -29,6 +29,12 @@ pub struct Config {
   )]
   pub spotify_redirect_uri: String,
 
+  #[envconfig(
+    from = "POSTGRES_DSN",
+    default = "postgresql://postgres:postgres@postgres:5432/api"
+  )]
+  pub postgres_dsn: String,
+
   #[envconfig(from = "VALKEY_DSN", default = "redis://valkey:6379")]
   pub valkey_dsn: String,
 

@@ -1,19 +1,34 @@
 use actix_web::{get, http::Error, web, HttpResponse};
+use chrono::{DateTime, Utc};
 use envconfig::Envconfig;
-use prisma_client_rust::Direction;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::FromRow;
 
 use crate::{
   config::Config,
-  connectivity::prisma::spotify_history,
   services::spotify::helpers,
   structs::spotify::{
     AuthorizationData, RecentSongQuery, SpotifyQueryString, SpotifyTokens,
   },
   ServerState,
 };
+
+/// Flattened `spotify_history` row joined with its device's name/type.
+#[derive(Debug, FromRow)]
+struct RecentRow {
+  id: String,
+  r#type: String,
+  name: String,
+  artists: Vec<serde_json::Value>,
+  length: i32,
+  image: String,
+  listened_at: DateTime<Utc>,
+  alt: Option<bool>,
+  device_name: Option<String>,
+  device_type: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AuthorizeQuery {
@@ -42,19 +57,19 @@ async fn recent_listens(
   state: web::Data<ServerState>,
   query: Option<web::Query<RecentSongQuery>>,
 ) -> Result<HttpResponse, Error> {
-  let prisma = &mut &state.prisma;
-
   let query: web::Query<RecentSongQuery> = query
     .unwrap_or(actix_web::web::Query(RecentSongQuery { limit: Some(10) }));
 
-  let recents = prisma
-    .spotify_history()
-    .find_many(vec![])
-    .order_by(spotify_history::listened_at::order(Direction::Desc))
-    .take(query.limit.unwrap_or(10))
-    .include(spotify_history::include!({ spotify_devices: select { name r#type } }))
-    .exec()
-    .await;
+  let recents = sqlx::query_as::<_, RecentRow>(
+    "SELECT h.id, h.type, h.name, h.artists, h.length, h.image, \
+       h.listened_at, h.alt, d.name AS device_name, d.type AS device_type \
+     FROM spotify_history h \
+     LEFT JOIN spotify_devices d ON d.id = h.device \
+     ORDER BY h.listened_at DESC LIMIT $1",
+  )
+  .bind(query.limit.unwrap_or(10))
+  .fetch_all(&state.db)
+  .await;
 
   let recents: Vec<serde_json::Value> = recents
     .unwrap()
@@ -67,7 +82,10 @@ async fn recent_listens(
         "artists": recent.artists,
         "length": recent.length,
         "image": recent.image,
-        "device": recent.spotify_devices,
+        "device": {
+          "name": recent.device_name,
+          "type": recent.device_type,
+        },
         "listened_at": recent.listened_at,
         "alt": recent.alt,
       })

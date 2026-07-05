@@ -1,7 +1,6 @@
 use crate::{
-  connectivity::prisma::blog_admin_users,
   structs::blog::{
-    BlogAdminIntSession, BlogLoginRequest, BlogUserMutate,
+    BlogAdminIntSession, BlogAdminUser, BlogLoginRequest, BlogUserMutate,
     BlogUserPasswordChange,
   },
   ServerState,
@@ -27,50 +26,47 @@ async fn login(
 ) -> Result<HttpResponse, Error> {
   let username = body.username.to_string();
 
-  let prisma = &state.prisma;
   let valkey = &mut state.valkey.clone();
 
-  let user_lookup = prisma
-    .blog_admin_users()
-    .find_first(vec![blog_admin_users::username::equals(username)])
-    .exec()
-    .await;
+  let user_lookup = sqlx::query_as::<_, BlogAdminUser>(
+    "SELECT * FROM blog_admin_users WHERE username = $1 LIMIT 1",
+  )
+  .bind(username)
+  .fetch_optional(&state.db)
+  .await;
 
   match user_lookup {
-    Ok(user) => match user {
-      Some(user) => {
-        let password = body.password.as_bytes();
-        let valid =
-          argon2::verify_encoded(&user.password, password).unwrap();
+    Ok(Some(user)) => {
+      let password = body.password.as_bytes();
+      let valid = argon2::verify_encoded(&user.password, password).unwrap();
 
-        if !valid {
-          return Ok(
-            HttpResponse::Unauthorized()
-              .json(json!({"code": "invalid_authentication"})),
-          );
-        }
-
-        let session_token: String = rand::thread_rng()
-          .sample_iter(&Alphanumeric)
-          .take(96)
-          .map(char::from)
-          .collect();
-
-        let _ = redis::cmd("SET")
-          .arg(format!("blog_admin_session/{}", session_token))
-          .arg(json!({"user_id": user.id}).to_string())
-          .query_async::<ConnectionManager, String>(&mut valkey.cm)
-          .await;
-
-        let response = json!({ "user": { "id": user.id, "username": user.username, "display_name": user.display_name, }, "session": { "token": session_token } });
-
-        Ok(HttpResponse::Ok().json(response))
+      if !valid {
+        return Ok(
+          HttpResponse::Unauthorized()
+            .json(json!({"code": "invalid_authentication"})),
+        );
       }
-      None => Ok(
-        HttpResponse::Unauthorized()
-          .json(json!({"code": "invalid_username"})),
-      ),
-    },
+
+      let session_token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(96)
+        .map(char::from)
+        .collect();
+
+      let _ = redis::cmd("SET")
+        .arg(format!("blog_admin_session/{}", session_token))
+        .arg(json!({"user_id": user.id}).to_string())
+        .query_async::<ConnectionManager, String>(&mut valkey.cm)
+        .await;
+
+      let response = json!({ "user": { "id": user.id, "username": user.username, "display_name": user.display_name, }, "session": { "token": session_token } });
+
+      Ok(HttpResponse::Ok().json(response))
+    }
+    Ok(None) => Ok(
+      HttpResponse::Unauthorized()
+        .json(json!({"code": "invalid_username"})),
+    ),
     Err(_) => Ok(
       HttpResponse::Unauthorized()
         .json(json!({"code": "failed_to_lookup_user"})),
@@ -81,7 +77,7 @@ async fn login(
 #[get("/me")]
 async fn get_user(req: HttpRequest) -> Result<HttpResponse, Error> {
   let exts = req.extensions_mut();
-  let user = exts.get::<blog_admin_users::Data>().unwrap();
+  let user = exts.get::<BlogAdminUser>().unwrap();
 
   Ok(HttpResponse::Ok().json(json!({
       "user": {
@@ -99,8 +95,7 @@ async fn update_user(
   body: Option<web::Json<BlogUserMutate>>,
 ) -> Result<HttpResponse, Error> {
   let exts = req.extensions_mut();
-  let user = exts.get::<blog_admin_users::Data>().unwrap();
-  let prisma = &state.prisma;
+  let user = exts.get::<BlogAdminUser>().unwrap();
 
   let body: Json<BlogUserMutate> =
     body.unwrap_or(actix_web::web::Json(BlogUserMutate {
@@ -108,25 +103,20 @@ async fn update_user(
       display_name: None,
     }));
 
-  let update_params: Vec<blog_admin_users::SetParam> = vec![
-    body.username.clone().map(blog_admin_users::username::set),
-    body.display_name.clone().map(|value: std::string::String| {
-      blog_admin_users::display_name::set(Some(value))
-    }),
-  ]
-  .into_iter()
-  .flatten()
-  .collect();
+  let username = body.username.clone().unwrap_or(user.username.clone());
+  let display_name =
+    body.display_name.clone().or(user.display_name.clone());
 
-  let user_record = prisma
-    .blog_admin_users()
-    .update(
-      blog_admin_users::id::equals(user.id.to_string()),
-      update_params,
-    )
-    .exec()
-    .await
-    .unwrap();
+  let user_record = sqlx::query_as::<_, BlogAdminUser>(
+    "UPDATE blog_admin_users SET username = $1, display_name = $2 \
+     WHERE id = $3 RETURNING *",
+  )
+  .bind(username)
+  .bind(display_name)
+  .bind(user.id.to_string())
+  .fetch_one(&state.db)
+  .await
+  .unwrap();
 
   Ok(HttpResponse::Ok().json(json!({
       "user": {
@@ -144,9 +134,7 @@ async fn change_password(
   body: web::Json<BlogUserPasswordChange>,
 ) -> Result<HttpResponse, Error> {
   let exts = req.extensions_mut();
-  let user = exts.get::<blog_admin_users::Data>().unwrap();
-
-  let prisma = &state.prisma;
+  let user = exts.get::<BlogAdminUser>().unwrap();
 
   if body.password == body.new_password {
     return Ok(
@@ -179,15 +167,14 @@ async fn change_password(
   )
   .unwrap();
 
-  let _ = prisma
-    .blog_admin_users()
-    .update(
-      blog_admin_users::id::equals(user.id.to_string()),
-      vec![blog_admin_users::password::set(new_hash)],
-    )
-    .exec()
-    .await
-    .unwrap();
+  let _ = sqlx::query(
+    "UPDATE blog_admin_users SET password = $1 WHERE id = $2",
+  )
+  .bind(new_hash)
+  .bind(user.id.to_string())
+  .execute(&state.db)
+  .await
+  .unwrap();
 
   Ok(HttpResponse::NoContent().finish())
 }

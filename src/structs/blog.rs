@@ -2,6 +2,7 @@ use actix_multipart::form::{bytes::Bytes, MultipartForm};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sqlx::FromRow;
 extern crate serde_json;
 
 #[derive(Deserialize, Debug)]
@@ -44,12 +45,12 @@ pub struct BlogAdminIntSession {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, FromRow)]
 pub struct BlogAdminUser {
   pub id: String,
   pub username: String,
   pub display_name: Option<String>,
-  pub password: Option<String>,
+  pub password: String,
 }
 
 #[serde_as]
@@ -67,7 +68,7 @@ pub struct BlogPostMutate {
 
 #[serde_as]
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromRow)]
 pub struct BlogPost {
   pub id: String,
   pub slug: String,
@@ -79,6 +80,16 @@ pub struct BlogPost {
   pub body: Option<String>,
   pub created_at: NaiveDateTime,
   pub published_at: Option<NaiveDateTime>,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromRow)]
+pub struct BlogAsset {
+  pub hash: String,
+  pub post_id: String,
+  pub file_type: String,
+  pub file_size: i32,
+  pub upload_date: NaiveDateTime,
 }
 
 #[derive(Debug, MultipartForm)]

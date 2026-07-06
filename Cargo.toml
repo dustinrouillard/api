@@ -29,6 +29,10 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-r
 # influxdb2/etc.) to build vendored from source, so the musl image never needs
 # a system OpenSSL. Not used directly in code.
 openssl-sys = { version = "0.9", features = ["vendored"] }
+# The old rustix 0.37 (pulled by async-io 1.x via lapin) fails to compile its
+# linux_raw backend on the musl toolchain (rustc_attrs misdetection). Force its
+# libc backend, which compiles cleanly. Not used directly in code.
+rustix = { version = "0.37", features = ["use-libc"] }
 rust-s3 = "0.33.0"
 actix-multipart = "0.6.1"
 infer = "0.15.0"

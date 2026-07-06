@@ -368,9 +368,9 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "amq-protocol"
-version = "7.2.0"
+version = "7.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f051d4d77904272e9be7e292607378dc9900d15b8d314bfd3ed4b82fdd84f125"
+checksum = "587d313f3a8b4a40f866cc84b6059fe83133bf172165ac3b583129dd211d8e1c"
 dependencies = [
  "amq-protocol-tcp",
  "amq-protocol-types",
@@ -382,9 +382,9 @@ dependencies = [
 
 [[package]]
 name = "amq-protocol-tcp"
-version = "7.2.0"
+version = "7.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3d51dd36e67d757c9ba80a7b2a2a2a69254c1dbe4d8c631824ec7f5b69f60e"
+checksum = "dc707ab9aa964a85d9fc25908a3fdc486d2e619406883b3105b48bf304a8d606"
 dependencies = [
  "amq-protocol-uri",
  "tcp-stream",
@@ -393,9 +393,9 @@ dependencies = [
 
 [[package]]
 name = "amq-protocol-types"
-version = "7.2.0"
+version = "7.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0acdd47054ced8b9bc89ee0dbb42ccc8028de48d8658b24de4c255a226c9bfec"
+checksum = "bf99351d92a161c61ec6ecb213bc7057f5b837dd4e64ba6cb6491358efd770c4"
 dependencies = [
  "cookie-factory",
  "nom",
@@ -405,9 +405,9 @@ dependencies = [
 
 [[package]]
 name = "amq-protocol-uri"
-version = "7.2.0"
+version = "7.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f17881b7575dab3e71403f28a3e50b71f0d1bd026829abca3c48664522ce0df0"
+checksum = "f89f8273826a676282208e5af38461a07fe939def57396af6ad5997fcf56577d"
 dependencies = [
  "amq-protocol-types",
  "percent-encoding",
@@ -461,6 +461,7 @@ dependencies = [
  "reqwest 0.12.4",
  "rust-argon2",
  "rust-s3",
+ "rustix 0.37.28",
  "serde",
  "serde_json",
  "serde_repr",
@@ -597,7 +598,7 @@ dependencies = [
  "log",
  "parking",
  "polling 2.8.0",
- "rustix 0.37.27",
+ "rustix 0.37.28",
  "slab",
  "socket2 0.4.10",
  "waker-fn",
@@ -803,7 +804,7 @@ dependencies = [
  "bitflags 2.5.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "log",
@@ -2269,9 +2270,9 @@ checksum = "d4345964bb142484797b161f473a503a434de77149dd8c7427788c6e13379388"
 
 [[package]]
 name = "lapin"
-version = "2.3.4"
+version = "2.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fae02c316a8a5922ce7518afa6b6c00e9a099f8e59587567e3331efdd11b8ceb"
+checksum = "02d2aa4725b9607915fa1a73e940710a3be6af508ce700e56897cbe8847fbb07"
 dependencies = [
  "amq-protocol",
  "async-global-executor-trait",
@@ -2317,7 +2318,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -3446,9 +3447,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.37.27"
+version = "0.37.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea8ca367a3a01fe35e6943c400addf443c0f57670e6ec51196f71a4b8762dd2"
+checksum = "519165d378b97752ca44bbe15047d5d3409e875f39327546b42ac81d7e18c1b6"
 dependencies = [
  "bitflags 1.3.2",
  "errno",
